@@ -216,21 +216,15 @@ def main():
     initialize_agent() # This function now assumes settings are already initialized
 
     # Initialize chat history and suggested prompts if they don't exist
-    # This part now uses the LLM-generated greeting via stui.get_greeting_message()
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-        # Add the initial greeting from the assistant
-        st.session_state.messages.append({"role": "assistant", "content": stui.get_greeting_message()})
-
-    if "suggested_prompts" not in st.session_state:
-        # Import default prompts from agent.py
-        from agent import DEFAULT_PROMPTS
-        st.session_state.suggested_prompts = DEFAULT_PROMPTS
+    # This is now handled by stui.init_session_state() called within stui.create_interface()
 
     # Create the rest of the interface using stui (displays chat history, sidebar, etc.)
+    # stui.create_interface() will call stui.init_session_state() which handles
+    # loading persistent chat history or initializing a new one.
     stui.create_interface() # This displays history and sidebar info
 
     # Display suggested prompts as a dropdown below the chat history
+    # Ensure suggested_prompts is available in session_state (initialized by stui.init_session_state)
     st.selectbox(
         "Select a suggested prompt:",
         # Add a blank option at the beginning
