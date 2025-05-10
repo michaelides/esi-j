@@ -13,7 +13,7 @@ from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec # Corrected im
 from llama_index.core import VectorStoreIndex, StorageContext
 from llama_index.core.agent import FunctionCallingAgentWorker
 from llama_index.core import Settings
-from llama_index.tools.code_interpreter import CodeInterpreterToolSpec # Import the tool spec#
+from llama_index.tools.code_interpreter import CodeInterpreterToolSpec, LocalCodeInterpreter # Import the tool spec and LocalCodeInterpreter
 # from llama_index.tools.azure_code_interpreter import AzureCodeInterpreterToolSpec as CodeInterpreterToolSpec
 
 # Ensure API keys are set as environment variables
@@ -257,11 +257,11 @@ def get_coder_tools():
     Returns the original tool spec's tool list.
     """
     try:
-        # Initialize the standard tool spec
-        # local_workdir argument removed as it's not accepted by the constructor.
-        # The tool will likely use a default working directory.
-        # The Coder Agent's prompt guides it to save files in UI_ACCESSIBLE_WORKSPACE.
-        code_spec = CodeInterpreterToolSpec()
+        # Initialize LocalCodeInterpreter with the desired workspace
+        local_interpreter = LocalCodeInterpreter(work_dir=UI_ACCESSIBLE_WORKSPACE)
+        
+        # Pass the pre-configured interpreter to CodeInterpreterToolSpec
+        code_spec = CodeInterpreterToolSpec(code_interpreter=local_interpreter)
         original_tools = code_spec.to_tool_list()
 
         if not original_tools:
