@@ -13,7 +13,8 @@ from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec # Corrected im
 from llama_index.core import VectorStoreIndex, StorageContext
 from llama_index.core.agent import FunctionCallingAgentWorker
 from llama_index.core import Settings
-from llama_index.tools.code_interpreter import CodeInterpreterToolSpec, LocalCodeInterpreter # Import the tool spec and LocalCodeInterpreter
+from llama_index.tools.code_interpreter import CodeInterpreterToolSpec
+from llama_index.tools.code_interpreter.base import LocalCodeInterpreter # Import LocalCodeInterpreter from .base
 # from llama_index.tools.azure_code_interpreter import AzureCodeInterpreterToolSpec as CodeInterpreterToolSpec
 
 # Ensure API keys are set as environment variables
