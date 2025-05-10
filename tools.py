@@ -14,7 +14,7 @@ from llama_index.core import VectorStoreIndex, StorageContext
 from llama_index.core.agent import FunctionCallingAgentWorker
 from llama_index.core import Settings
 from llama_index.tools.code_interpreter import CodeInterpreterToolSpec
-from llama_index.core.tools.local_code_interpreter import LocalCodeInterpreter # Corrected import path
+# from llama_index.core.tools.local_code_interpreter import LocalCodeInterpreter # Removed problematic import
 # from llama_index.tools.azure_code_interpreter import AzureCodeInterpreterToolSpec as CodeInterpreterToolSpec
 
 # Ensure API keys are set as environment variables
@@ -258,11 +258,10 @@ def get_coder_tools():
     Returns the original tool spec's tool list.
     """
     try:
-        # Initialize LocalCodeInterpreter with the desired workspace
-        local_interpreter = LocalCodeInterpreter(work_dir=UI_ACCESSIBLE_WORKSPACE)
-        
-        # Pass the pre-configured interpreter to CodeInterpreterToolSpec
-        code_spec = CodeInterpreterToolSpec(code_interpreter=local_interpreter)
+        # Initialize CodeInterpreterToolSpec without explicit LocalCodeInterpreter
+        # This will use the default internal code interpreter, likely with a temporary work_dir.
+        # The issue of files not being saved to UI_ACCESSIBLE_WORKSPACE will likely return.
+        code_spec = CodeInterpreterToolSpec()
         original_tools = code_spec.to_tool_list()
 
         if not original_tools:
