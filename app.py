@@ -10,8 +10,7 @@ import stui
 from agent import create_orchestrator_agent, generate_suggested_prompts, SUGGESTED_PROMPT_COUNT, DEFAULT_PROMPTS, initialize_settings as initialize_agent_settings
 # UI_ACCESSIBLE_WORKSPACE is now primarily managed within tools.py and coder agent
 # from tools import UI_ACCESSIBLE_WORKSPACE
-# PERSISTENT_SESSIONS_DIR is managed in stui.py, but path needed for saving
-PERSISTENT_SESSIONS_DIR = "./persistent_sessions" # Ensure this matches stui.py
+# PERSISTENT_SESSIONS_DIR = "./persistent_sessions" # Removed
 from dotenv import load_dotenv
 # import shutil # No longer needed here, file moving logic removed
 
@@ -172,18 +171,7 @@ def handle_user_input(chat_input_value: str | None):
         # Update suggested prompts based on new chat history (using original full history)
         st.session_state.suggested_prompts = generate_suggested_prompts(st.session_state.messages)
 
-        # --- Save chat history to persistent storage ---
-        if "persistent_session_id" in st.session_state:
-            session_id = st.session_state.persistent_session_id
-            session_file_path = os.path.join(PERSISTENT_SESSIONS_DIR, f"{session_id}.json")
-            try:
-                os.makedirs(PERSISTENT_SESSIONS_DIR, exist_ok=True) # Ensure dir exists
-                with open(session_file_path, "w") as f:
-                    json.dump(st.session_state.messages, f, indent=2)
-                print(f"Saved chat history for session {session_id} to {session_file_path}")
-            except Exception as e:
-                print(f"Error saving chat history to {session_file_path}: {e}")
-        # --- End save chat history ---
+        # --- Persistent storage logic removed ---
 
         # Force Streamlit to rerun the script immediately to display the new messages
         st.rerun()

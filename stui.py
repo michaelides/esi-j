@@ -5,9 +5,9 @@ import os
 import re # Import regex module
 import json # Added for parsing RAG source JSON
 from typing import List, Dict, Any, Optional
-import uuid # For generating unique session IDs
-# Import the new greeting function
-from agent import generate_llm_greeting
+# import uuid # No longer needed for persistent session IDs
+# Import the new greeting function and DEFAULT_PROMPTS
+from agent import generate_llm_greeting, DEFAULT_PROMPTS
 # Removed import shutil as it's no longer needed
 
 
@@ -18,35 +18,27 @@ def get_greeting_message() -> str:
     # It includes its own error handling and fallback.
     return generate_llm_greeting()
 
-PERSISTENT_SESSIONS_DIR = "./persistent_sessions"
+# PERSISTENT_SESSIONS_DIR = "./persistent_sessions" # Removed
 
 def init_session_state():
-    """Initialize session state variables, loading from persistent storage if available."""
-    os.makedirs(PERSISTENT_SESSIONS_DIR, exist_ok=True)
+    """Initialize session state variables for a new chat."""
+    # if "persistent_session_id" not in st.session_state: # Removed
+    #     st.session_state.persistent_session_id = uuid.uuid4().hex # Removed
+    #     print(f"New persistent session ID generated: {st.session_state.persistent_session_id}") # Removed
 
-    if "persistent_session_id" not in st.session_state:
-        st.session_state.persistent_session_id = uuid.uuid4().hex
-        print(f"New persistent session ID generated: {st.session_state.persistent_session_id}")
-
-    session_id = st.session_state.persistent_session_id
-    session_file_path = os.path.join(PERSISTENT_SESSIONS_DIR, f"{session_id}.json")
+    # session_id = st.session_state.persistent_session_id # Removed
+    # session_file_path = os.path.join(PERSISTENT_SESSIONS_DIR, f"{session_id}.json") # Removed
 
     if "messages" not in st.session_state: # Initialize messages only if not already set
-        if os.path.exists(session_file_path):
-            try:
-                with open(session_file_path, "r") as f:
-                    st.session_state.messages = json.load(f)
-                print(f"Loaded chat history for session {session_id} from {session_file_path}")
-            except Exception as e:
-                print(f"Error loading chat history from {session_file_path}: {e}. Initializing new chat.")
-                st.session_state.messages = [{"role": "assistant", "content": get_greeting_message()}]
-        else:
-            print(f"No chat history found for session {session_id}. Initializing new chat.")
-            st.session_state.messages = [{"role": "assistant", "content": get_greeting_message()}]
+        # Always start with a fresh greeting message
+        print("Initializing new chat session with greeting.")
+        st.session_state.messages = [{"role": "assistant", "content": get_greeting_message()}]
+        # else: # Removed complex loading logic
+            # print(f"No chat history found for session {session_id}. Initializing new chat.") # Removed
+            # st.session_state.messages = [{"role": "assistant", "content": get_greeting_message()}] # Removed
 
     if "suggested_prompts" not in st.session_state:
-        # Import here to avoid circular imports
-        from agent import DEFAULT_PROMPTS
+        # DEFAULT_PROMPTS is now imported at the top of stui.py
         st.session_state.suggested_prompts = DEFAULT_PROMPTS
 
 def display_chat():
@@ -272,9 +264,31 @@ def create_interface():
 
         st.divider()
         st.info("Made for NBS7091A and NBS7095x")
+        
+        st.divider()
+        if st.button("🔄 Reset Chat", key="reset_chat_button", help="Clears the current conversation and starts a new one."):
+            reset_chat_callback()
 
     # Display chat messages
     display_chat()
+
+def reset_chat_callback():
+    """Resets the chat history and suggested prompts to their initial state."""
+    print("Resetting chat...")
+    # Clear current messages and add the initial greeting
+    st.session_state.messages = [{"role": "assistant", "content": get_greeting_message()}]
+    # Reset suggested prompts
+    st.session_state.suggested_prompts = DEFAULT_PROMPTS # DEFAULT_PROMPTS imported at top
+    
+    # Clear any pending prompt from dropdown
+    if 'prompt_to_use' in st.session_state:
+        st.session_state.prompt_to_use = None
+    if 'selected_prompt_dropdown' in st.session_state:
+        st.session_state.selected_prompt_dropdown = ""
+
+    # Optionally, you might want to clear other session state variables specific to a single chat
+    # For now, just messages and prompts are reset. Agent instance and LLM settings persist.
+    st.rerun()
 
 if __name__ == "__main__":
     create_interface()
