@@ -5,6 +5,7 @@ import os
 import re # Import regex module
 import json # Added for parsing RAG source JSON
 from typing import List, Dict, Any, Optional
+import uuid # For generating unique session IDs
 # Import the new greeting function
 from agent import generate_llm_greeting
 # Removed import shutil as it's no longer needed
@@ -17,12 +18,31 @@ def get_greeting_message() -> str:
     # It includes its own error handling and fallback.
     return generate_llm_greeting()
 
+PERSISTENT_SESSIONS_DIR = "./persistent_sessions"
+
 def init_session_state():
-    """Initialize session state variables if they don't exist."""
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-        # Add the initial greeting from the assistant
-        st.session_state.messages.append({"role": "assistant", "content": get_greeting_message()})
+    """Initialize session state variables, loading from persistent storage if available."""
+    os.makedirs(PERSISTENT_SESSIONS_DIR, exist_ok=True)
+
+    if "persistent_session_id" not in st.session_state:
+        st.session_state.persistent_session_id = uuid.uuid4().hex
+        print(f"New persistent session ID generated: {st.session_state.persistent_session_id}")
+
+    session_id = st.session_state.persistent_session_id
+    session_file_path = os.path.join(PERSISTENT_SESSIONS_DIR, f"{session_id}.json")
+
+    if "messages" not in st.session_state: # Initialize messages only if not already set
+        if os.path.exists(session_file_path):
+            try:
+                with open(session_file_path, "r") as f:
+                    st.session_state.messages = json.load(f)
+                print(f"Loaded chat history for session {session_id} from {session_file_path}")
+            except Exception as e:
+                print(f"Error loading chat history from {session_file_path}: {e}. Initializing new chat.")
+                st.session_state.messages = [{"role": "assistant", "content": get_greeting_message()}]
+        else:
+            print(f"No chat history found for session {session_id}. Initializing new chat.")
+            st.session_state.messages = [{"role": "assistant", "content": get_greeting_message()}]
 
     if "suggested_prompts" not in st.session_state:
         # Import here to avoid circular imports
