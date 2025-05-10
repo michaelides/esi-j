@@ -4,7 +4,6 @@ from llama_index.core import Settings
 from llama_index.llms.gemini import Gemini
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding # Added
 from llama_index.core.agent import AgentRunner, FunctionCallingAgentWorker
-from llama_index.core.agent.workflow import CodeActAgent # Added for CodeActAgent
 # from llama_index.core.agent.types import AgentChatResponse # Removed problematic import
 from typing import Any # Added for generic type hinting
 from llama_index.core.tools import FunctionTool
@@ -195,16 +194,15 @@ You have access to a `code_interpreter` tool.
 If a task does not require code execution or file generation, state that.
 If there's an error during code execution, report it clearly.
 """
-    # Use CodeActAgent.from_tools, which is the standard way to initialize it.
-    # This requires the LLM (Settings.llm) to be compatible with
-    # CodeInterpreterAgentWorker, meaning it must be an instance of ChatModelClient.
-    coder_agent = CodeActAgent.from_tools(
+    # Reverting to FunctionCallingAgentWorker and AgentRunner for the coder agent
+    # as CodeActAgent has compatibility issues with Gemini LLM (not being a ChatModelClient).
+    agent_worker = FunctionCallingAgentWorker.from_tools(
         tools=coder_tools, # These are tools from CodeInterpreterToolSpec
         llm=Settings.llm,
         system_prompt=system_prompt,
         verbose=True
     )
-    return coder_agent
+    return AgentRunner(agent_worker)
 
 # --- Orchestrator Agent ---
 def create_orchestrator_agent(db_path="./ragdb/chromadb"):
