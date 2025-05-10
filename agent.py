@@ -4,6 +4,7 @@ from llama_index.core import Settings
 from llama_index.llms.gemini import Gemini
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding # Added
 from llama_index.core.agent import AgentRunner, FunctionCallingAgentWorker
+from llama_index.core.agent.workflow import CodeActAgent # Added for CodeActAgent
 # from llama_index.core.agent.types import AgentChatResponse # Removed problematic import
 from typing import Any # Added for generic type hinting
 from llama_index.core.tools import FunctionTool
@@ -194,13 +195,14 @@ You have access to a `code_interpreter` tool.
 If a task does not require code execution or file generation, state that.
 If there's an error during code execution, report it clearly.
 """
-    agent_worker = FunctionCallingAgentWorker.from_tools(
+    # Replace FunctionCallingAgentWorker and AgentRunner with CodeActAgent
+    coder_agent = CodeActAgent.from_tools(
         tools=coder_tools, # This is already a list of tools from CodeInterpreterToolSpec
         llm=Settings.llm,
         system_prompt=system_prompt,
         verbose=True
     )
-    return AgentRunner(agent_worker)
+    return coder_agent
 
 # --- Orchestrator Agent ---
 def create_orchestrator_agent(db_path="./ragdb/chromadb"):
