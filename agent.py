@@ -195,14 +195,25 @@ You have access to a `code_interpreter` tool.
 If a task does not require code execution or file generation, state that.
 If there's an error during code execution, report it clearly.
 """
-    # Replace FunctionCallingAgentWorker and AgentRunner with CodeActAgent
-    coder_agent = CodeActAgent.from_tools(
-        tools=coder_tools, # This is already a list of tools from CodeInterpreterToolSpec
+    # Instantiate FunctionCallingAgentWorker, which is known to work with Gemini LLM
+    fca_worker = FunctionCallingAgentWorker.from_tools(
+        tools=coder_tools,
         llm=Settings.llm,
-        system_prompt=system_prompt,
+        system_prompt=system_prompt, # System prompt for the worker
         verbose=True
     )
-    return coder_agent
+
+    # Use CodeActAgent as the runner, providing the compatible worker.
+    # CodeActAgent is a subclass of AgentRunner and orchestrates the "code-act" loop.
+    # It will use the fca_worker to generate steps (e.g., call code_interpreter tool).
+    coder_agent_runner = CodeActAgent(
+        agent_worker=fca_worker,
+        verbose=True # Verbosity for the CodeActAgent's own processing
+        # LLM and system_prompt for CodeActAgent itself can often be inherited from the worker,
+        # or set here if CodeActAgent needs its own distinct LLM/prompt for its meta-reasoning.
+        # For now, we rely on the worker's configuration.
+    )
+    return coder_agent_runner
 
 # --- Orchestrator Agent ---
 def create_orchestrator_agent(db_path="./ragdb/chromadb"):
