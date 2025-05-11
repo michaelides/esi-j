@@ -141,6 +141,8 @@ def get_rag_tool_for_agent(db_path="./ragdb", collection_name="resources"):
                  embed_model=Settings.embed_model # Use the globally set embed model
              )
              query_engine = index.as_query_engine(llm=Settings.llm) # Use the globally set LLM
+            
+            # query_engine = index.as_chat_engine(chat_mode="react", llm = Settings.llm, verbose =True)
 
              # Define a simple function to wrap the query engine call
              def execute_rag_query(input: str):
