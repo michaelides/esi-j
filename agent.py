@@ -38,16 +38,9 @@ def initialize_settings():
     Settings.embed_model = GoogleGenAIEmbedding(model_name="models/text-embedding-004", api_key=google_api_key)
     # Use a potentially more stable model name and set a default temperature
     # The temperature can be overridden later based on the slider
-    Settings.llm = Gemini(model_name="models/gemini-2.0-flash",
+    Settings.llm = Gemini(model_name="models/gemini-2.5-flash-preview-04-17",
                           api_key=google_api_key,
-                          temperature=0.7) # Set default temperature
-    # Settings.llm = Gemini(model_name= "models/gemini-2.5-flash-preview-04-17" ,
-    #     api_key=google_api_key,
-    #     temperature=0.7, # Set default temperature here too if using this model
-    #     config=types.GenerateContentConfig(
-    #         thinking_config=types.ThinkingConfig(thinking_budget=1024)
-    #     ),
-    # )
+                          temperature=0.7) 
 
 
 # --- Greeting Generation ---
