@@ -191,7 +191,7 @@ If there's an error during code execution, report it clearly.
     # Using CodeActAgent for the coder agent as per request.
     # Note: Ensure Settings.llm (Gemini) is compatible with CodeActAgent's requirements.
     # CodeActAgent is a workflow and typically doesn't need to be wrapped in AgentRunner.
-    coder_agent = CodeActAgent.from_tools(
+    coder_agent = CodeActAgent(
         tools=coder_tools, # These are tools from CodeInterpreterToolSpec
         llm=Settings.llm,
         system_prompt=system_prompt, # Pass the system prompt; CodeActAgent may use it differently
