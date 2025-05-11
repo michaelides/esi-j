@@ -203,6 +203,12 @@ def main():
     # Initialize agent (stores it in session state)
     initialize_agent() # This function now assumes settings are already initialized
 
+    # Handle regeneration request if flag is set
+    # This needs to be called before stui.create_interface() so that
+    # the messages are updated before being displayed.
+    if st.session_state.get("do_regenerate", False):
+        handle_regeneration_request() # This function will set do_regenerate to False and rerun
+
     # Initialize chat history and suggested prompts if they don't exist
     # This is now handled by stui.init_session_state() called within stui.create_interface()
 
@@ -227,6 +233,49 @@ def main():
     # Handle user input (either from chat box or a clicked suggested prompt button)
     # If a button was clicked, prompt_to_use is set, otherwise use chat_input_value
     handle_user_input(chat_input_value)
+
+
+# --- Regeneration Logic ---
+def handle_regeneration_request():
+    """Handles the request to regenerate the last assistant response."""
+    if not st.session_state.get("do_regenerate", False):
+        return
+
+    st.session_state.do_regenerate = False # Consume the flag
+
+    if not st.session_state.messages or st.session_state.messages[-1]['role'] != 'assistant':
+        print("Warning: Regeneration called but last message is not from assistant or no messages exist.")
+        st.rerun() # Rerun to clear state if needed
+        return
+
+    # Case 1: Regenerating the initial greeting
+    if len(st.session_state.messages) == 1:
+        print("Regenerating initial greeting...")
+        # generate_llm_greeting is already imported from agent module
+        new_greeting = generate_llm_greeting()
+        st.session_state.messages[0]['content'] = new_greeting
+        st.rerun()
+        return
+
+    # Case 2: Regenerating a response to a user query
+    st.session_state.messages.pop() # Remove last assistant message
+
+    if not st.session_state.messages or st.session_state.messages[-1]['role'] != 'user':
+        print("Warning: Cannot regenerate, no preceding user query found after popping assistant message.")
+        # Potentially restore the popped message or handle error state more gracefully
+        st.rerun()
+        return
+
+    print("Regenerating last assistant response to user query...")
+    prompt_to_regenerate = st.session_state.messages[-1]['content']
+    # The history should include the user message we are responding to
+    formatted_history_for_regen = format_chat_history(st.session_state.messages)
+
+    response_text = get_agent_response(prompt_to_regenerate, chat_history=formatted_history_for_regen)
+    st.session_state.messages.append({"role": "assistant", "content": response_text})
+    st.session_state.suggested_prompts = generate_suggested_prompts(st.session_state.messages)
+    st.rerun()
+
 
 if __name__ == "__main__":
     # Display a warning if environment variables are missing

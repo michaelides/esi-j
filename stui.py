@@ -226,6 +226,21 @@ def display_chat():
                 except Exception as e:
                     st.error(f"Error creating download button for {code_download_filename}: {e}")
 
+            # Add regenerate button for the last assistant message
+            if message["role"] == "assistant" and msg_idx == len(st.session_state.messages) - 1:
+                can_regenerate = False
+                # Case 1: Initial greeting (assistant is the only message)
+                if len(st.session_state.messages) == 1:
+                    can_regenerate = True
+                # Case 2: Assistant message follows a user message
+                elif len(st.session_state.messages) > 1 and st.session_state.messages[msg_idx - 1]["role"] == "user":
+                    can_regenerate = True
+                
+                if can_regenerate:
+                    if st.button("🔄 Regenerate Response", key=f"regenerate_{msg_idx}"):
+                        st.session_state.do_regenerate = True
+                        st.rerun()
+
 
 def create_interface():
 
@@ -290,5 +305,7 @@ def reset_chat_callback():
     # For now, just messages and prompts are reset. Agent instance and LLM settings persist.
     st.rerun()
 
-if __name__ == "__main__":
-    create_interface()
+# Removed if __name__ == "__main__": block as it's not standard for multipage apps
+# and main() is called directly at the end of the script.
+# if __name__ == "__main__":
+# create_interface()
