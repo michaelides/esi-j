@@ -237,7 +237,7 @@ def display_chat():
                     can_regenerate = True
                 
                 if can_regenerate:
-                    if st.button("🔄 Regenerate Response", key=f"regenerate_{msg_idx}"):
+                    if st.button("🔄", key=f"regenerate_{msg_idx}", help="Regenerate Response"):
                         st.session_state.do_regenerate = True
                         st.rerun()
 
