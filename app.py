@@ -7,7 +7,7 @@ from typing import List, Dict, Any
 from llama_index.core.llms import ChatMessage, MessageRole # Import necessary types
 import stui
 # Import initialize_settings and alias it, and the new orchestrator agent creator
-from agent import create_orchestrator_agent, generate_suggested_prompts, SUGGESTED_PROMPT_COUNT, DEFAULT_PROMPTS, initialize_settings as initialize_agent_settings
+from agent import create_orchestrator_agent, generate_suggested_prompts, SUGGESTED_PROMPT_COUNT, DEFAULT_PROMPTS, initialize_settings as initialize_agent_settings, generate_llm_greeting
 # UI_ACCESSIBLE_WORKSPACE is now primarily managed within tools.py and coder agent
 # from tools import UI_ACCESSIBLE_WORKSPACE
 # PERSISTENT_SESSIONS_DIR = "./persistent_sessions" # Removed
