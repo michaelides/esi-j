@@ -21,8 +21,15 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 # --- Configuration ---
 # Define the path for the SimpleVectorStore persistence relative to PROJECT_ROOT
-SIMPLE_STORE_PERSIST_PATH_RELATIVE = os.path.join("ragdb", "simple_vector_store")
-SIMPLE_STORE_PERSIST_PATH = os.path.join(PROJECT_ROOT, SIMPLE_STORE_PERSIST_PATH_RELATIVE)
+# Use the same environment variable and default as app.py for consistency
+SIMPLE_STORE_PATH_ENV_VAR = "SIMPLE_STORE_PATH"
+# Default path segment, os.path.join ensures platform compatibility for the segment itself
+DEFAULT_SIMPLE_STORE_RELATIVE_PATH = os.path.join("ragdb", "simple_vector_store")
+SIMPLE_STORE_PERSIST_PATH_RELATIVE = os.getenv(SIMPLE_STORE_PATH_ENV_VAR, DEFAULT_SIMPLE_STORE_RELATIVE_PATH)
+
+# Construct the full absolute path. PROJECT_ROOT is already absolute.
+# os.path.join will correctly handle SIMPLE_STORE_PERSIST_PATH_RELATIVE if it's like "../foo"
+SIMPLE_STORE_PERSIST_PATH = os.path.abspath(os.path.join(PROJECT_ROOT, SIMPLE_STORE_PERSIST_PATH_RELATIVE))
 
 print(f"Simple Vector Store Persistence Path (make_rag): {SIMPLE_STORE_PERSIST_PATH}") # Debug output
 # collection_name = "resources" # No longer needed for SimpleVectorStore
