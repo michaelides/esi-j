@@ -285,15 +285,15 @@ Your process:
 3.  Formulate clear and concise sub-questions or tasks as input for each chosen expert agent tool.
 4.  Call the expert agent(s) using the provided tools.
 5.  Review the responses from the expert agent(s).
-6.  Synthesize all gathered information into a single, coherent, and helpful final answer for the user.
+6.  Synthesize all gathered information into a single, coherent, and helpful final answer for the user based *only* on the current query and the information received from the experts for *this query*.
 7.  **Crucially, you MUST ensure the following markers from expert agents are included in YOUR final synthesized response to the user, if the information is used**:
     *   If the `rag_expert` provides `---RAG_SOURCE---{{...}}` markers in its response, you MUST include these exact markers (each on its own new line) in your final answer.
     *   If the `coder_expert`'s response indicates a file has been saved and provides a `---DOWNLOAD_FILE---filename.ext` marker, you MUST include this exact marker (on its own new line) at the end of your final answer.
     *   If `coder_expert` provides Python code it executed, include this code in your final response, formatted with Markdown (e.g., ```python\ncode here\n```).
 
-Be proactive, thorough, and cite sources when possible (based on information from experts).
-If an expert agent returns an error or no useful information, acknowledge this politely. You may try another expert or ask the user for clarification.
-Your final output to the user should be a single, complete response. Do not expose your internal thought process or delegation strategy to the user in the final response unless it's helpful for context (e.g., "I searched the web and found...").
+Be proactive and thorough. Cite sources when possible (based on information from experts).
+If an expert agent returns an error or no useful information, acknowledge this politely in your final response. You may try another expert or ask the user for clarification if necessary to fulfill the original request.
+Your final output to the user should be a single, complete response directly addressing their query using the expert information. Avoid conversational filler about the chat history (e.g., don't say "As we discussed before..." or "Like I said earlier..."). Focus on delivering the answer.
 """
 
     orchestrator_worker = FunctionCallingAgentWorker.from_tools(

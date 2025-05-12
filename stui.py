@@ -116,13 +116,13 @@ def display_chat():
                         print(f"Extracted RAG source: {rag_data.get('name') or rag_data.get('title')}")
                     except json.JSONDecodeError as e:
                         print(f"Warning: Could not decode RAG source JSON: '{json_str}'. Error: {e}")
-                        # If JSON is malformed, add back the marker and the problematic segment to the display
-                        # This ensures the user at least sees the marker if parsing fails.
-                        processed_text_after_rag += temp_text_for_rag_extraction[marker_pos:consumed_upto]
+                        # If JSON is malformed, do NOT add the marker or the failed JSON back to the main text.
+                        # The marker and its content are consumed regardless of parsing success.
+                        # processed_text_after_rag += temp_text_for_rag_extraction[marker_pos:consumed_upto] # REMOVED THIS LINE
 
                     current_pos = consumed_upto # Update current_pos to after the consumed part (marker + JSON line(s))
 
-                text_to_display = processed_text_after_rag.strip()
+                text_to_display = processed_text_after_rag.strip() # This now contains only text *before* any RAG markers
 
                 # --- 2. Extract Code Interpreter download marker ---
                 # This marker is usually at the very end of a specific type of message.
