@@ -21,6 +21,10 @@ from llama_index.core.llms import LLM # Import base LLM type for type hinting
 
 load_dotenv()
 
+# Determine project root based on the script's location
+# For agent.py directly in the 'esi' project root, PROJECT_ROOT is the directory of agent.py
+PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
+
 
 # --- Constants ---
 SUGGESTED_PROMPT_COUNT = 4

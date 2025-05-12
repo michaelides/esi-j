@@ -19,7 +19,8 @@ from llama_index.tools.code_interpreter import CodeInterpreterToolSpec
 # from llama_index.tools.azure_code_interpreter import AzureCodeInterpreterToolSpec as CodeInterpreterToolSpec
 
 # Determine project root based on the script's location
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+# For tools.py directly in the 'esi' project root, PROJECT_ROOT is the directory of tools.py
+PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 # Ensure API keys are set as environment variables
 # os.environ["TAVILY_API_KEY"] = "YOUR_TAVILY_API_KEY"
