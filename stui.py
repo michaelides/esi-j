@@ -10,6 +10,9 @@ from typing import List, Dict, Any, Optional
 from agent import generate_llm_greeting, DEFAULT_PROMPTS
 # Removed import shutil as it's no longer needed
 
+# Determine project root based on the script's location
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
 
 def get_greeting_message() -> str:
     """Generate a greeting message, trying the LLM first and falling back to static."""
@@ -47,9 +50,10 @@ def display_chat():
     CODE_DOWNLOAD_MARKER = "---DOWNLOAD_FILE---"  # For files from code interpreter
     RAG_SOURCE_MARKER = "---RAG_SOURCE---"      # For files/links from RAG
     
-    # Workspace for code interpreter files
-    code_workspace = "./code_interpreter_ws" 
-    os.makedirs(code_workspace, exist_ok=True)
+    # Workspace for code interpreter files, defined relative to PROJECT_ROOT
+    CODE_WORKSPACE_RELATIVE = "./code_interpreter_ws"
+    code_workspace_absolute = os.path.join(PROJECT_ROOT, CODE_WORKSPACE_RELATIVE)
+    os.makedirs(code_workspace_absolute, exist_ok=True)
 
     for msg_idx, message in enumerate(st.session_state.messages):
         with st.chat_message(message["role"]):
@@ -59,7 +63,7 @@ def display_chat():
             text_to_display = content
             rag_sources_data = []
             code_download_filename = None
-            code_download_filepath = None
+            code_download_filepath_relative = None # Store relative path from marker
             code_is_image = False
 
             if message["role"] == "assistant":
@@ -134,19 +138,21 @@ def display_chat():
                     text_to_display = text_to_display[:code_marker_match.start()].strip() + text_to_display[code_marker_match.end():].strip()
                     
                     print(f"Found code download marker. Filename: {extracted_filename}")
-                    potential_filepath = os.path.join(code_workspace, extracted_filename)
-                    potential_filepath = os.path.abspath(potential_filepath)
+                    # The filename from the marker is relative to the code workspace
+                    code_download_filename = extracted_filename
+                    code_download_filepath_relative = os.path.join(CODE_WORKSPACE_RELATIVE, extracted_filename) # Store the relative path
 
-                    if extracted_filename and os.path.exists(potential_filepath):
-                        code_download_filename = extracted_filename
-                        code_download_filepath = potential_filepath
-                        print(f"Code download file exists at: {code_download_filepath}")
+                    # Resolve the relative path to an absolute path on the current system
+                    code_download_filepath_absolute = os.path.join(PROJECT_ROOT, code_download_filepath_relative)
+
+                    if extracted_filename and os.path.exists(code_download_filepath_absolute):
+                        print(f"Code download file exists at: {code_download_filepath_absolute}")
                         image_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff']
                         if os.path.splitext(code_download_filename)[1].lower() in image_extensions:
                             code_is_image = True
                             print(f"Detected image file from code interpreter: {code_download_filename}")
                     else:
-                        print(f"Code download file '{extracted_filename}' NOT found at '{potential_filepath}'.")
+                        print(f"Code download file '{extracted_filename}' NOT found at '{code_download_filepath_absolute}'.")
                         text_to_display += f"\n\n*(Warning: The file '{extracted_filename}' mentioned for download could not be found.)*"
 
             # --- 3. Display main text content ---
@@ -164,16 +170,21 @@ def display_chat():
 
                 if source_type == "pdf":
                     pdf_name = rag_data.get("name", "source.pdf")
-                    pdf_path = rag_data.get("path")
-                    identifier = pdf_path
+                    # The path stored in metadata is now relative
+                    pdf_relative_path = rag_data.get("path")
+                    
+                    identifier = pdf_relative_path # Use relative path for deduplication
                     if identifier and identifier not in displayed_rag_identifiers:
-                        if pdf_path and os.path.exists(pdf_path):
+                        # Resolve the relative path to an absolute path on the current system
+                        pdf_absolute_path = os.path.join(PROJECT_ROOT, pdf_relative_path) if pdf_relative_path else None
+
+                        if pdf_absolute_path and os.path.exists(pdf_absolute_path):
                             try:
                                 citation_num = rag_data.get('citation_number')
                                 citation_prefix = f"[{citation_num}] " if citation_num else ""
                                 button_label = f"{citation_prefix}Download PDF: {pdf_name}"
 
-                                with open(pdf_path, "rb") as fp:
+                                with open(pdf_absolute_path, "rb") as fp:
                                     st.download_button(
                                         label=button_label,
                                         data=fp,
@@ -181,13 +192,15 @@ def display_chat():
                                         mime="application/pdf",
                                         key=f"rag_pdf_{msg_idx}_{rag_idx}_{pdf_name}" # Key still unique per original source item
                                     )
-                                print(f"Added download button for RAG PDF: {button_label} (Path: {pdf_path})")
+                                print(f"Added download button for RAG PDF: {button_label} (Path: {pdf_absolute_path})")
                                 display_item = True
                             except Exception as e:
                                 st.error(f"Error creating download button for {pdf_name}: {e}")
                                 print(f"Error for RAG PDF '{pdf_name}': {e}")
-                        elif pdf_path:
-                            st.warning(f"Referenced PDF '{pdf_name}' not found at path: {pdf_path}")
+                        elif pdf_relative_path:
+                            # Display filename in warning, not the potentially misleading absolute path
+                            st.warning(f"Referenced PDF '{pdf_name}' not found.")
+                            print(f"Warning: Referenced PDF '{pdf_name}' not found at expected absolute path: {pdf_absolute_path}")
                 
                 elif source_type == "web":
                     url = rag_data.get("url")
@@ -204,17 +217,21 @@ def display_chat():
                     st.divider() # Show divider only if an item was displayed
 
             # --- 5. Display Code Interpreter output (Image or Download Button) ---
-            if code_is_image and code_download_filepath:
+            # Resolve the code download path relative to PROJECT_ROOT
+            code_download_absolute_filepath = os.path.join(PROJECT_ROOT, code_download_filepath_relative) if code_download_filepath_relative else None
+
+            if code_is_image and code_download_absolute_filepath and os.path.exists(code_download_absolute_filepath): # Ensure file exists before trying to display as image
                 try:
-                    st.image(code_download_filepath, caption=code_download_filename, use_container_width=True)
+                    st.image(code_download_absolute_filepath, caption=code_download_filename, use_container_width=True)
                     print(f"Successfully displayed image from code interpreter: {code_download_filename}")
                 except Exception as e:
                     st.error(f"Error displaying image {code_download_filename}: {e}")
             
-            if code_download_filepath and not code_is_image: # If it's an image, it's already displayed. Button is for non-image or if image display fails.
-                                                              # Or always show download for images too? For now, only if not displayed as image.
+            # If it's an image, it's already displayed. Button is for non-image or if image display fails.
+            # Or always show download for images too? For now, only if not displayed as image.
+            if code_download_absolute_filepath and (not code_is_image or not os.path.exists(code_download_absolute_filepath)): # Add check if image display failed
                 try:
-                    with open(code_download_filepath, "rb") as fp:
+                    with open(code_download_absolute_filepath, "rb") as fp:
                         st.download_button(
                             label=f"Download {code_download_filename}",
                             data=fp,
