@@ -149,7 +149,8 @@ Do not attempt to answer questions outside of this scope or use tools not provid
 def create_rag_agent(db_path):
     """Creates an agent specialized in RAG from a local knowledge base."""
     # get_rag_tool_for_agent returns a single tool (FunctionTool)
-    rag_tool_function = get_rag_tool_for_agent(db_path=db_path, collection_name="resources")
+    # Removed collection_name argument as it's no longer needed for SimpleVectorStore
+    rag_tool_function = get_rag_tool_for_agent(db_path=db_path)
     if not rag_tool_function: # This function itself is the tool, not a list
         print("Warning: RAG tool failed to initialize. RAG Agent will be ineffective.")
         dummy_worker = FunctionCallingAgentWorker.from_tools([], llm=Settings.llm, verbose=True, system_prompt="I am a RAG agent but have no RAG tool.")
