@@ -103,7 +103,8 @@ def get_web_scraper_tool_for_agent():
 # Note: collection_name is no longer needed for SimpleVectorStore
 def get_rag_tool_for_agent(db_path="./ragdb/simple_vector_store"):
     """Initializes the RAG query tool using a persisted SimpleVectorStore."""
-    persist_dir = db_path # db_path now directly points to the persistence directory
+    # Resolve the relative db_path to an absolute path based on PROJECT_ROOT
+    persist_dir = os.path.join(PROJECT_ROOT, db_path)
     print(f"Attempting to load RAG index from persistence directory: {persist_dir}")
 
     # Check if the persistence directory exists
@@ -111,8 +112,9 @@ def get_rag_tool_for_agent(db_path="./ragdb/simple_vector_store"):
         print(f"Error: Persistence directory '{persist_dir}' not found or is empty.")
         print("Please run 'python ragdb/make_rag.py' to build the local knowledge base.")
         # Return a dummy tool indicating the store is missing
+        # The error message should refer to the relative path for clarity in instructions
         return FunctionTool.from_defaults(
-            fn=lambda *args, **kwargs: f"Error: The local knowledge base was not found at '{persist_dir}'. Please ensure it has been created by running 'python ragdb/make_rag.py'.",
+            fn=lambda *args, **kwargs: f"Error: The local knowledge base was not found at '{db_path}'. Please ensure it has been created by running 'python ragdb/make_rag.py'.",
             name="rag_dissertation_retriever",
             description="The local dissertation knowledge base is currently unavailable because it has not been built or loaded."
         )
@@ -205,7 +207,8 @@ def get_rag_tool_for_agent(db_path="./ragdb/simple_vector_store"):
         # If loading succeeds, we assume the index is usable.
 
     except Exception as e:
-        error_message = f"Error initializing or loading RAG tool from '{persist_dir}': {e}"
+        # The error message should refer to the relative path for clarity in instructions
+        error_message = f"Error initializing or loading RAG tool from '{db_path}': {e}"
         print(error_message)
         # Return a dummy tool in case of loading error
         # Capture the error message in the lambda's default argument
