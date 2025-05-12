@@ -21,7 +21,9 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 # --- Configuration ---
 # Define the path for the SimpleVectorStore persistence
-SIMPLE_STORE_PERSIST_PATH = os.path.join(project_root, "ragdb", "simple_vector_store")
+#SIMPLE_STORE_PERSIST_PATH = os.path.join(project_root, "ragdb", "simple_vector_store")
+SIMPLE_STORE_PERSIST_PATH = os.path.join("ragdb", "simple_vector_store")
+
 print(f"Simple Vector Store Persistence Path (make_rag): {SIMPLE_STORE_PERSIST_PATH}") # Debug output
 # collection_name = "resources" # No longer needed for SimpleVectorStore
 # LlamaIndex uses slightly different model names sometimes, adjust if needed
