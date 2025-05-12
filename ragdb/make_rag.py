@@ -17,36 +17,40 @@ import sys # Import sys to check Python version if needed, or for sys.exit
 load_dotenv()
 
 # Determine project root based on the script's location
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 # --- Configuration ---
-# Define the path for the SimpleVectorStore persistence
-#SIMPLE_STORE_PERSIST_PATH = os.path.join(project_root, "ragdb", "simple_vector_store")
-SIMPLE_STORE_PERSIST_PATH = os.path.join("ragdb", "simple_vector_store")
+# Define the path for the SimpleVectorStore persistence relative to PROJECT_ROOT
+SIMPLE_STORE_PERSIST_PATH_RELATIVE = os.path.join("ragdb", "simple_vector_store")
+SIMPLE_STORE_PERSIST_PATH = os.path.join(PROJECT_ROOT, SIMPLE_STORE_PERSIST_PATH_RELATIVE)
 
 print(f"Simple Vector Store Persistence Path (make_rag): {SIMPLE_STORE_PERSIST_PATH}") # Debug output
 # collection_name = "resources" # No longer needed for SimpleVectorStore
 # LlamaIndex uses slightly different model names sometimes, adjust if needed
 CHUNK_SIZE = 512 # Adjusted chunk size, common for LlamaIndex
 CHUNK_OVERLAP = 20 # Adjusted chunk overlap
-# Define the directory containing source documents for the RAG database
-SOURCE_DATA_DIR = os.path.join(project_root, "ragdb/source_data") # Use absolute path
-WEB_MARKDOWN_PATH = os.path.join(project_root, "ragdb/web_markdown") # Use absolute path
+# Define the directory containing source documents for the RAG database relative to PROJECT_ROOT
+SOURCE_DATA_DIR_RELATIVE = os.path.join("ragdb", "source_data")
+SOURCE_DATA_DIR = os.path.join(PROJECT_ROOT, SOURCE_DATA_DIR_RELATIVE)
+# Define the directory for scraped markdown relative to PROJECT_ROOT
+WEB_MARKDOWN_PATH_RELATIVE = os.path.join("ragdb", "web_markdown")
+WEB_MARKDOWN_PATH = os.path.join(PROJECT_ROOT, WEB_MARKDOWN_PATH_RELATIVE)
 
 # --- Add URLs to scrape ---
-WEBPAGES_FILE = os.path.join(project_root, 'ragdb/webpages.txt')
+WEBPAGES_FILE_RELATIVE = os.path.join('ragdb', 'webpages.txt')
+WEBPAGES_FILE = os.path.join(PROJECT_ROOT, WEBPAGES_FILE_RELATIVE)
 URLS_TO_SCRAPE = []
 try:
     with open(WEBPAGES_FILE, 'r') as file:
         # Strip whitespace/newlines from each line
         URLS_TO_SCRAPE = [line.strip() for line in file if line.strip()]
     if not URLS_TO_SCRAPE:
-        print(f"Warning: {WEBPAGES_FILE} is empty. No webpages will be scraped.")
+        print(f"Warning: {WEBPAGES_FILE_RELATIVE} is empty. No webpages will be scraped.")
 except FileNotFoundError:
-    print(f"Warning: Could not find {WEBPAGES_FILE}. Please create this file in the project root directory and add URLs to scrape, one per line. No webpages will be scraped.")
+    print(f"Warning: Could not find {WEBPAGES_FILE_RELATIVE}. Please create this file in the project root directory and add URLs to scrape, one per line. No webpages will be scraped.")
     # Continue without scraping if file is missing
 except Exception as e:
-    print(f"Error reading {WEBPAGES_FILE}: {e}. No webpages will be scraped.")
+    print(f"Error reading {WEBPAGES_FILE_RELATIVE}: {e}. No webpages will be scraped.")
     # Continue without scraping if error occurs
 
 
@@ -199,7 +203,7 @@ async def main():
     await scrape_websites(URLS_TO_SCRAPE, WEB_MARKDOWN_PATH)
 
     # 2. Load documents using SimpleDirectoryReader
-    print(f"Loading documents from {SOURCE_DATA_DIR} and {WEB_MARKDOWN_PATH}...")
+    print(f"Loading documents from {SOURCE_DATA_DIR_RELATIVE} and {WEB_MARKDOWN_PATH_RELATIVE}...")
     # Ensure directories exist before loading
     os.makedirs(SOURCE_DATA_DIR, exist_ok=True)
     os.makedirs(WEB_MARKDOWN_PATH, exist_ok=True)
@@ -210,6 +214,23 @@ async def main():
     required_exts = [".pdf", ".txt", ".md", ".csv"]
 
     all_documents = []
+
+    # Define a function to get relative path metadata
+    def get_relative_path_metadata(filename: str) -> dict:
+        """Generates metadata including the file path relative to PROJECT_ROOT."""
+        try:
+            # Find the path relative to PROJECT_ROOT
+            relative_path = os.path.relpath(filename, start=PROJECT_ROOT)
+            return {"file_path": relative_path}
+        except ValueError:
+            # If the file is outside PROJECT_ROOT, store the absolute path as a fallback
+            print(f"Warning: File {filename} is outside project root. Storing absolute path.")
+            return {"file_path": filename}
+        except Exception as e:
+            print(f"Error generating relative path for {filename}: {e}. Storing absolute path.")
+            return {"file_path": filename}
+
+
     for input_dir in input_dirs:
         if not os.path.exists(input_dir) or not os.listdir(input_dir):
             print(f"Directory is empty or does not exist, skipping: {input_dir}")
@@ -219,7 +240,7 @@ async def main():
                 input_dir=input_dir,
                 required_exts=required_exts,
                 recursive=True, # Scan subdirectories
-                # file_metadata=filename_fn # Optional: Add metadata based on filename
+                file_metadata=get_relative_path_metadata # Use the function to get relative path metadata
             )
             docs = reader.load_data(show_progress=True)
             if docs:
@@ -262,11 +283,11 @@ async def main():
     )
 
     # 6. Persist the index, vector store, and other data
-    print(f"Persisting index to disk at {SIMPLE_STORE_PERSIST_PATH}...")
+    print(f"Persisting index to disk at {SIMPLE_STORE_PERSIST_PATH_RELATIVE}...")
     os.makedirs(SIMPLE_STORE_PERSIST_PATH, exist_ok=True)
     index.storage_context.persist(persist_dir=SIMPLE_STORE_PERSIST_PATH)
 
-    print(f"Successfully created and persisted index to {SIMPLE_STORE_PERSIST_PATH}")
+    print(f"Successfully created and persisted index to {SIMPLE_STORE_PERSIST_PATH_RELATIVE}")
     # Verification is implicit in successful persistence. We can't easily get a 'count' like with Chroma.
 
     print("RAG database creation script finished.")
