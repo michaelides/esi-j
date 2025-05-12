@@ -186,8 +186,8 @@ def get_rag_tool_for_agent(db_path="./ragdb/simple_vector_store"):
                      print(f"Error during RAG query execution: {e}")
                      return f"Error querying the knowledge base: {e}"
 
-            # Wrap the simple function with FunctionTool
-            return FunctionTool.from_defaults(
+        # Wrap the simple function with FunctionTool
+        return FunctionTool.from_defaults(
                  fn=execute_rag_query,
                  name="rag_dissertation_retriever",
                  description=(
