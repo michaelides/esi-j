@@ -11,7 +11,8 @@ from agent import generate_llm_greeting, DEFAULT_PROMPTS
 # Removed import shutil as it's no longer needed
 
 # Determine project root based on the script's location
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+# For stui.py directly in the 'esi' project root, PROJECT_ROOT is the directory of stui.py
+PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 
 def get_greeting_message() -> str:

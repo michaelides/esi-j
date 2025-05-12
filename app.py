@@ -20,7 +20,8 @@ from dotenv import load_dotenv
 # import shutil # No longer needed here, file moving logic removed
 
 # Determine project root based on the script's location
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+# For app.py directly in the 'esi' project root, PROJECT_ROOT is the directory of app.py
+PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 # Load environment variables
 load_dotenv()
