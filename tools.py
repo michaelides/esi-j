@@ -1,16 +1,17 @@
 import os
-import chromadb
+# import chromadb # Removed chromadb
 import json # Added for RAG source formatting
 
 from llama_index.core.tools import FunctionTool, QueryEngineTool
-from llama_index.core.vector_stores import VectorStoreInfo
-from llama_index.vector_stores.chroma import ChromaVectorStore
+# from llama_index.core.vector_stores import VectorStoreInfo # Not used directly now
+# from llama_index.vector_stores.chroma import ChromaVectorStore # Removed chromadb
+from llama_index.core.vector_stores import SimpleVectorStore # Added for type hinting if needed
 from llama_index.readers.web import BeautifulSoupWebReader
 from llama_index.readers.semanticscholar import SemanticScholarReader
 from llama_index.tools.wikipedia import WikipediaToolSpec
 from llama_index.tools.tavily_research import TavilyToolSpec
 from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec # Corrected import name if needed, ensure library provides this
-from llama_index.core import VectorStoreIndex, StorageContext
+from llama_index.core import VectorStoreIndex, StorageContext, load_index_from_storage # Added load_index_from_storage
 from llama_index.core.agent import FunctionCallingAgentWorker
 from llama_index.core import Settings
 from llama_index.tools.code_interpreter import CodeInterpreterToolSpec
@@ -99,53 +100,40 @@ def get_web_scraper_tool_for_agent():
         print(f"Error initializing Web Scraper Tool: {e}")
         return []
 
-def get_rag_tool_for_agent(db_path="./ragdb", collection_name="resources"):
-    """Initializes the RAG query tool using ChromaDB."""
+# Note: collection_name is no longer needed for SimpleVectorStore
+def get_rag_tool_for_agent(db_path="./ragdb/simple_vector_store"):
+    """Initializes the RAG query tool using a persisted SimpleVectorStore."""
+    persist_dir = db_path # db_path now directly points to the persistence directory
+    print(f"Attempting to load RAG index from persistence directory: {persist_dir}")
+
+    # Check if the persistence directory exists
+    if not os.path.exists(persist_dir) or not os.listdir(persist_dir): # Check if dir exists and is not empty
+        print(f"Error: Persistence directory '{persist_dir}' not found or is empty.")
+        print("Please run 'python ragdb/make_rag.py' to build the local knowledge base.")
+        # Return a dummy tool indicating the store is missing
+        return FunctionTool.from_defaults(
+            fn=lambda *args, **kwargs: f"Error: The local knowledge base was not found at '{persist_dir}'. Please ensure it has been created by running 'python ragdb/make_rag.py'.",
+            name="rag_dissertation_retriever",
+            description="The local dissertation knowledge base is currently unavailable because it has not been built or loaded."
+        )
+
     try:
-        # Initialize ChromaDB client
-        # Use the provided db_path which should be the path to the chromadb directory
-        db = chromadb.PersistentClient(path=db_path)
+        # Load the index from the persisted directory
+        # Ensure Settings.embed_model and Settings.llm are set globally before this
+        print("Loading index from storage...")
+        storage_context = StorageContext.from_defaults(persist_dir=persist_dir)
+        # SimpleVectorStore is loaded automatically within the storage context
+        # We need the embed_model to potentially reconstruct parts of the index if needed by LlamaIndex
+        index = load_index_from_storage(storage_context, embed_model=Settings.embed_model)
+        print("Successfully loaded index from storage.")
 
-        # Check if collection exists before trying to get it
-        try:
-            chroma_collection = db.get_collection(collection_name)
-            print(f"Connected to ChromaDB collection. Contains {chroma_collection.count()} documents.")
-        except Exception as e:
-             # Handle case where collection does not exist
-             print(f"Error accessing ChromaDB collection '{collection_name}' at path '{db_path}': {e}")
-             print("Please ensure you have run ragdb/make_rag.py to create the database.")
-             # Return a dummy tool indicating the collection is missing
-             return FunctionTool.from_defaults(
-                fn=lambda *args, **kwargs: f"Error: The local knowledge base (RAG) collection '{collection_name}' was not found at '{db_path}'. Please ensure it has been created.",
-                name="rag_dissertation_retriever",
-                description="The local dissertation knowledge base is currently unavailable because the collection was not found."
-            )
+        # Create a query engine from the loaded index
+        # Ensure Settings.llm is set globally
+        query_engine = index.as_query_engine(llm=Settings.llm)
+        print("RAG query engine created.")
 
-
-        # Initialize vector store with HuggingFace embeddings
-        vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
-        storage_context = StorageContext.from_defaults(vector_store=vector_store)
-
-        # Create index with HuggingFace embeddings (redundant if set globally, but harmless)
-        # Ensure Settings.embed_model is set before this point, ideally in agent.py or app.py
-        # Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5") # This should be set globally
-
-        # Check if collection has documents
-        if chroma_collection.count() > 0: # More reliable check
-             # Explicitly pass the global LLM to the query engine to avoid OpenAI fallback
-             # Ensure Settings.llm is set before this point, ideally in agent.py or app.py
-             # Need to create the index first before getting the query engine
-             index = VectorStoreIndex.from_vector_store(
-                 vector_store=vector_store,
-                 storage_context=storage_context,
-                 embed_model=Settings.embed_model # Use the globally set embed model
-             )
-             query_engine = index.as_query_engine(llm=Settings.llm) # Use the globally set LLM
-            
-            # query_engine = index.as_chat_engine(chat_mode="react", llm = Settings.llm, verbose =True)
-
-             # Define a simple function to wrap the query engine call
-             def execute_rag_query(input: str):
+        # Define a simple function to wrap the query engine call
+        def execute_rag_query(input: str):
                  """Executes a query against the RAG engine and returns the text response."""
                  try:
                      response_obj = query_engine.query(input)
@@ -203,7 +191,7 @@ def get_rag_tool_for_agent(db_path="./ragdb", collection_name="resources"):
                  fn=execute_rag_query,
                  name="rag_dissertation_retriever",
                  description=(
-                     f"Retrieves relevant information from the local dissertation knowledge base stored in '{collection_name}'. "
+                     f"Retrieves relevant information from the local dissertation knowledge base (persisted at '{persist_dir}'). "
                      "Use this for specific institutional knowledge or previously saved research. "
                      "The tool's output will include the textual answer and may be followed by structured references "
                      "(e.g., to PDF files or web URLs) using '---RAG_SOURCE---' markers. "
@@ -213,19 +201,13 @@ def get_rag_tool_for_agent(db_path="./ragdb", collection_name="resources"):
                      "The query to the knowledge base should be provided as the 'input' string argument."
                  ),
              )
-        else:
-            print(f"Warning: No documents found in ChromaDB collection '{collection_name}' at path '{db_path}'. RAG tool disabled.")
-            # Return a dummy tool or None if the index is empty
-            return FunctionTool.from_defaults(
-                fn=lambda *args, **kwargs: f"Error: The local knowledge base (RAG) collection '{collection_name}' is empty.",
-                name="rag_dissertation_retriever",
-                description="The local dissertation knowledge base is currently empty."
-            )
+        # The check for empty index is implicitly handled by the loading process.
+        # If loading succeeds, we assume the index is usable.
 
     except Exception as e:
-        error_message = f"Error initializing RAG tool: {e}" # Corrected indentation for the 'else' block as well
+        error_message = f"Error initializing or loading RAG tool from '{persist_dir}': {e}"
         print(error_message)
-        # Return a dummy tool or None in case of error
+        # Return a dummy tool in case of loading error
         # Capture the error message in the lambda's default argument
         return FunctionTool.from_defaults(
             fn=lambda *args, msg=error_message, **kwargs: msg,
@@ -314,11 +296,13 @@ def get_coder_tools():
 
 
 #     try:
-#         test_db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ragdb', 'chromadb'))
+#         # Update test path to point to the simple vector store directory
+#         test_db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ragdb', 'simple_vector_store'))
 #         print(f"Attempting to initialize RAG tool with test DB path: {test_db_path}")
-#         rag_tools_list = get_rag_tool_for_agent(db_path=test_db_path)
-#         if rag_tools_list:
-#             rag_tool = rag_tools_list[0]
+#         # get_rag_tool_for_agent now returns a single tool, not a list
+#         rag_tool = get_rag_tool_for_agent(db_path=test_db_path)
+#         if rag_tool:
+#             # rag_tool = rag_tools_list[0] # No longer needed
 #             print(f"RAG Tool: {rag_tool.metadata.name} - {rag_tool.metadata.description[:60]}...")
 #             # Further testing of rag_tool.fn() or rag_tool.query_engine if applicable
 #         else:

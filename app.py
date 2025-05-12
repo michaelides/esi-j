@@ -27,7 +27,9 @@ st.set_page_config(
 
 
 # --- Constants and Configuration ---
-DB_PATH = os.getenv("DB_PATH", "./ragdb/chromadb")
+# Update DB_PATH default to the new simple vector store persistence directory
+SIMPLE_STORE_PATH = os.path.abspath(os.getenv("SIMPLE_STORE_PATH", "./ragdb/simple_vector_store"))
+DB_PATH = SIMPLE_STORE_PATH # Use the absolute path for consistency
 AGENT_SESSION_KEY = "esi_orchestrator_agent" # Key for storing orchestrator agent
 # CODE_INTERPRETER_TOOL_NAME = "code_interpreter" # Managed by Coder Agent
 # RAG_TOOL_NAME = "rag_dissertation_retriever" # Managed by RAG Agent, tool name for orchestrator is "rag_expert"
@@ -282,7 +284,8 @@ if __name__ == "__main__":
     if not os.getenv("GOOGLE_API_KEY"):
         st.warning("⚠️ GOOGLE_API_KEY environment variable not set. The agent may not work properly.")
 
-    if not os.path.exists(DB_PATH):
-        st.warning(f"⚠️ Database path {DB_PATH} not found. The RAG knowledge base may not be available.")
+    # Update warning to check for the simple vector store path and suggest build command
+    if not os.path.exists(DB_PATH) or not os.listdir(DB_PATH):
+        st.warning(f"⚠️ Local knowledge base not found or empty at '{DB_PATH}'. RAG features will be unavailable. Please run `python ragdb/make_rag.py` to build it.")
 
     main()

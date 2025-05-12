@@ -1,10 +1,11 @@
 import os
 import asyncio
-import chromadb
+# import chromadb # Removed chromadb
 from urllib.parse import urlparse
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, StorageContext
 from llama_index.core.node_parser import SentenceSplitter
-from llama_index.vector_stores.chroma import ChromaVectorStore
+# from llama_index.vector_stores.chroma import ChromaVectorStore # Removed chromadb
+from llama_index.core.vector_stores import SimpleVectorStore # Added SimpleVectorStore
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding # Added
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
@@ -19,9 +20,10 @@ load_dotenv()
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 # --- Configuration ---
-CHROMADB_DB_PATH = os.path.join(project_root, "ragdb", "chromadb") # Use absolute path
-print(f"RAG Database Path (make_rag): {CHROMADB_DB_PATH}")  # Debug output
-collection_name = "resources" # Changed collection name to "resources" as requested
+# Define the path for the SimpleVectorStore persistence
+SIMPLE_STORE_PERSIST_PATH = os.path.join(project_root, "ragdb", "simple_vector_store")
+print(f"Simple Vector Store Persistence Path (make_rag): {SIMPLE_STORE_PERSIST_PATH}") # Debug output
+# collection_name = "resources" # No longer needed for SimpleVectorStore
 # LlamaIndex uses slightly different model names sometimes, adjust if needed
 CHUNK_SIZE = 512 # Adjusted chunk size, common for LlamaIndex
 CHUNK_OVERLAP = 20 # Adjusted chunk overlap
@@ -188,7 +190,7 @@ async def main():
     # Initialize the embedding model here, it will be passed to the index
     embedding_model = GoogleGenAIEmbedding(model_name="models/text-embedding-004")
 
-    print(f"Target ChromaDB Collection: {collection_name}")
+    print(f"Target Persistence Path: {SIMPLE_STORE_PERSIST_PATH}")
 
 
     # 1. Scrape websites
@@ -241,22 +243,12 @@ async def main():
     # Use LlamaIndex SentenceSplitter
     node_parser = SentenceSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
 
-    # 4. Initialize ChromaDB Client and Vector Store
-    print(f"Initializing ChromaDB client at {CHROMADB_DB_PATH}...")
-    os.makedirs(CHROMADB_DB_PATH, exist_ok=True)
-    db = chromadb.PersistentClient(path=CHROMADB_DB_PATH)
-
-    print(f"Getting or creating ChromaDB collection: {collection_name}")
-    chroma_collection = db.get_or_create_collection(collection_name)
-
-    print("Initializing ChromaVectorStore...")
-    # Use LlamaIndex ChromaVectorStore
-    vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
-
-    # 5. Create Storage Context
+    # 4. Initialize SimpleVectorStore and Storage Context
+    print("Initializing SimpleVectorStore...")
+    vector_store = SimpleVectorStore()
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
-    # 6. Create VectorStoreIndex (This performs parsing, embedding, and indexing)
+    # 5. Create VectorStoreIndex (This performs parsing, embedding, and indexing)
     # This approach processes all documents every time.
     print(f"Creating index for {len(all_documents)} documents... (This may take a while)")
     index = VectorStoreIndex.from_documents(
@@ -267,14 +259,13 @@ async def main():
         show_progress=True,
     )
 
-    print(f"Successfully created/updated index in ChromaDB collection '{collection_name}'.")
-    print(f"ChromaDB persisted to {CHROMADB_DB_PATH}")
-    # Verify index size using the vector store's client count
-    try:
-        count = chroma_collection.count()
-        print(f"Chroma collection '{collection_name}' now contains {count} embedded chunks.")
-    except Exception as e:
-        print(f"Could not get count from Chroma collection: {e}")
+    # 6. Persist the index, vector store, and other data
+    print(f"Persisting index to disk at {SIMPLE_STORE_PERSIST_PATH}...")
+    os.makedirs(SIMPLE_STORE_PERSIST_PATH, exist_ok=True)
+    index.storage_context.persist(persist_dir=SIMPLE_STORE_PERSIST_PATH)
+
+    print(f"Successfully created and persisted index to {SIMPLE_STORE_PERSIST_PATH}")
+    # Verification is implicit in successful persistence. We can't easily get a 'count' like with Chroma.
 
     print("RAG database creation script finished.")
 

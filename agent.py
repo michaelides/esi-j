@@ -198,7 +198,8 @@ If there's an error during code execution, report it clearly.
     return AgentRunner(agent_worker)
 
 # --- Orchestrator Agent ---
-def create_orchestrator_agent(db_path="./ragdb/chromadb"):
+# Update default db_path to the new simple vector store persistence directory
+def create_orchestrator_agent(db_path="./ragdb/simple_vector_store"):
     """Creates the Orchestrator Agent that delegates to specialized agents."""
     initialize_settings() # Ensure LLM settings are initialized
 
@@ -374,10 +375,10 @@ Summarize the key points about W.
 #     load_dotenv()
 #     try:
 #         # Test Orchestrator Agent
-#         # Ensure DB_PATH is correctly pointing to your chromadb for RAG agent
-#         test_db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ragdb', 'chromadb'))
+#         # Update test path to point to the simple vector store directory
+#         test_db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ragdb', 'simple_vector_store'))
 #         print(f"Using test DB path for RAG agent: {test_db_path}")
-        
+
 #         orchestrator = create_orchestrator_agent(db_path=test_db_path)
 #         print("Orchestrator agent created successfully.")
 
