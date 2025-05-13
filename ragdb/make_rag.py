@@ -6,6 +6,7 @@ from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, StorageCon
 from llama_index.core.node_parser import SentenceSplitter
 # from llama_index.vector_stores.chroma import ChromaVectorStore # Removed chromadb
 from llama_index.core.vector_stores import SimpleVectorStore # Added SimpleVectorStore
+from llama_index.core.storage.fs_store import HuggingFaceFS # Added for HF dataset storage
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding # Added
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
@@ -20,18 +21,17 @@ load_dotenv()
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 # --- Configuration ---
-# Define the path for the SimpleVectorStore persistence relative to PROJECT_ROOT
-# Use the same environment variable and default as app.py for consistency
-SIMPLE_STORE_PATH_ENV_VAR = "SIMPLE_STORE_PATH"
-# Default path segment, os.path.join ensures platform compatibility for the segment itself
-DEFAULT_SIMPLE_STORE_RELATIVE_PATH = os.path.join("ragdb", "simple_vector_store")
-SIMPLE_STORE_PERSIST_PATH_RELATIVE = os.getenv(SIMPLE_STORE_PATH_ENV_VAR, DEFAULT_SIMPLE_STORE_RELATIVE_PATH)
+# Hugging Face dataset configuration for SimpleVectorStore persistence
+HF_DATASET_ID = "gm42/esi_simplevector"
+# Subdirectory within the HF dataset where the vector store files will be saved
+HF_VECTOR_STORE_SUBDIR = "vector_store_data" 
 
-# Construct the full absolute path. PROJECT_ROOT is already absolute.
-# os.path.join will correctly handle SIMPLE_STORE_PERSIST_PATH_RELATIVE if it's like "../foo"
-SIMPLE_STORE_PERSIST_PATH = os.path.abspath(os.path.join(PROJECT_ROOT, SIMPLE_STORE_PERSIST_PATH_RELATIVE))
+# Ensure HF_TOKEN is set for writing to Hugging Face Hub
+if not os.getenv("HF_TOKEN"):
+    print("Warning: HF_TOKEN environment variable is not set. Make sure you are logged in via `huggingface-cli login` or have set HF_TOKEN to write to the Hugging Face Dataset.")
 
-print(f"Simple Vector Store Persistence Path (make_rag): {SIMPLE_STORE_PERSIST_PATH}") # Debug output
+print(f"Target Hugging Face Dataset for RAG persistence: {HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}")
+
 # collection_name = "resources" # No longer needed for SimpleVectorStore
 # LlamaIndex uses slightly different model names sometimes, adjust if needed
 CHUNK_SIZE = 512 # Adjusted chunk size, common for LlamaIndex
@@ -203,8 +203,7 @@ async def main():
     # Initialize the embedding model here, it will be passed to the index
     embedding_model = GoogleGenAIEmbedding(model_name="models/text-embedding-004")
 
-    print(f"Target Persistence Path: {SIMPLE_STORE_PERSIST_PATH}")
-
+    print(f"Configuring RAG to persist to Hugging Face Dataset: {HF_DATASET_ID}, path in repo: {HF_VECTOR_STORE_SUBDIR}")
 
     # 1. Scrape websites
     await scrape_websites(URLS_TO_SCRAPE, WEB_MARKDOWN_PATH)
@@ -274,9 +273,17 @@ async def main():
     node_parser = SentenceSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
 
     # 4. Initialize SimpleVectorStore and Storage Context
-    print("Initializing SimpleVectorStore...")
+    print("Initializing SimpleVectorStore and HuggingFaceFS for persistence...")
     vector_store = SimpleVectorStore()
-    storage_context = StorageContext.from_defaults(vector_store=vector_store)
+    
+    # Initialize HuggingFaceFS
+    hf_fs = HuggingFaceFS(
+        repo_id=HF_DATASET_ID,
+        path_in_repo=HF_VECTOR_STORE_SUBDIR, # Files will be stored under this path in the HF dataset
+        token=os.getenv("HF_TOKEN") # Uses HF_TOKEN env var or login session
+    )
+    
+    storage_context = StorageContext.from_defaults(vector_store=vector_store, fs=hf_fs)
 
     # 5. Create VectorStoreIndex (This performs parsing, embedding, and indexing)
     # This approach processes all documents every time.
@@ -289,13 +296,15 @@ async def main():
         show_progress=True,
     )
 
-    # 6. Persist the index, vector store, and other data
-    print(f"Persisting index to disk at {SIMPLE_STORE_PERSIST_PATH_RELATIVE}...")
-    os.makedirs(SIMPLE_STORE_PERSIST_PATH, exist_ok=True)
-    index.storage_context.persist(persist_dir=SIMPLE_STORE_PERSIST_PATH)
+    # 6. Persist the index, vector store, and other data to Hugging Face Dataset
+    print(f"Persisting index to Hugging Face Dataset: {HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}...")
+    # When fs is provided in StorageContext, persist() writes to the fs.
+    # The persist_dir argument here is relative to the fs's root (path_in_repo).
+    # Using "." to persist to the root of HF_VECTOR_STORE_SUBDIR.
+    index.storage_context.persist(persist_dir=".") 
 
-    print(f"Successfully created and persisted index to {SIMPLE_STORE_PERSIST_PATH_RELATIVE}")
-    # Verification is implicit in successful persistence. We can't easily get a 'count' like with Chroma.
+    print(f"Successfully created and persisted index to Hugging Face Dataset: {HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}")
+    # Verification is implicit in successful persistence.
 
     print("RAG database creation script finished.")
 
