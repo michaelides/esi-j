@@ -53,8 +53,8 @@ def initialize_agent():
         print("Initializing orchestrator agent for new session (LLM settings should already be done)...")
         try:
             # create_orchestrator_agent uses the globally initialized Settings.llm
-            # Pass the resolved absolute DB_PATH
-            st.session_state[AGENT_SESSION_KEY] = create_orchestrator_agent(db_path=DB_PATH)
+            # and now loads RAG data from Hugging Face Hub, so db_path is not needed.
+            st.session_state[AGENT_SESSION_KEY] = create_orchestrator_agent()
             print("Orchestrator agent object initialized successfully.")
         except Exception as e:
             print(f"Error initializing orchestrator agent: {e}")
