@@ -63,7 +63,7 @@ def generate_llm_greeting() -> str:
 
         # Use a simple prompt for a greeting
         # Using 'complete' for a single, non-chat generation
-        prompt = "Generate a short, friendly, and welcoming greeting message (1-2 sentences) for a user interacting with an AI assistant named ESI designed to help with university dissertations. Mention ESI by name."
+        prompt = "Generate a single, short, friendly, and welcoming greeting message (1-2 sentences) for a user interacting with an AI assistant named ESI designed to help with university dissertations. Mention ESI by name. Provide only the greeting itself, with no extra text or options."
         response = llm.complete(prompt)
         greeting = response.text.strip()
 
