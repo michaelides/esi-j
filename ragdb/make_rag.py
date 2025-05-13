@@ -6,7 +6,7 @@ from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, StorageCon
 from llama_index.core.node_parser import SentenceSplitter
 # from llama_index.vector_stores.chroma import ChromaVectorStore # Removed chromadb
 from llama_index.core.vector_stores import SimpleVectorStore # Added SimpleVectorStore
-from llama_index.storage.kvstore.huggingface import HuggingFaceFSStore # Added for HF dataset storage
+from huggingface_hub import HfFileSystem # Added for HF dataset storage
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding # Added
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
@@ -276,12 +276,9 @@ async def main():
     print("Initializing SimpleVectorStore and HuggingFaceFS for persistence...")
     vector_store = SimpleVectorStore()
     
-    # Initialize HuggingFaceFSStore
-    hf_fs = HuggingFaceFSStore(
-        repo_id=HF_DATASET_ID,
-        path_in_repo=HF_VECTOR_STORE_SUBDIR, # Files will be stored under this path in the HF dataset
-        token=os.getenv("HF_TOKEN") # Uses HF_TOKEN env var or login session
-    )
+    # Initialize HfFileSystem
+    hf_fs = HfFileSystem(token=os.getenv("HF_TOKEN"))
+    # The repo_id and path_in_repo will be part of the persist_dir path later
     
     storage_context = StorageContext.from_defaults(vector_store=vector_store, fs=hf_fs)
 
@@ -299,9 +296,9 @@ async def main():
     # 6. Persist the index, vector store, and other data to Hugging Face Dataset
     print(f"Persisting index to Hugging Face Dataset: {HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}...")
     # When fs is provided in StorageContext, persist() writes to the fs.
-    # The persist_dir argument here is relative to the fs's root (path_in_repo).
-    # Using "." to persist to the root of HF_VECTOR_STORE_SUBDIR.
-    index.storage_context.persist(persist_dir=".") 
+    # The persist_dir needs to be the full path on Hugging Face Hub.
+    persist_target_path = f"hf://{HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}"
+    index.storage_context.persist(persist_dir=persist_target_path) 
 
     print(f"Successfully created and persisted index to Hugging Face Dataset: {HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}")
     # Verification is implicit in successful persistence.
