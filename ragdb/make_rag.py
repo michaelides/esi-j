@@ -296,8 +296,9 @@ async def main():
     # 6. Persist the index, vector store, and other data to Hugging Face Dataset
     print(f"Persisting index to Hugging Face Dataset: {HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}...")
     # When fs is provided in StorageContext, persist() writes to the fs.
-    # The persist_dir needs to be the full path on Hugging Face Hub.
-    persist_target_path = f"hf://{HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}"
+    # The persist_dir should be the path on Hugging Face Hub, usable by HfFileSystem.
+    # For datasets, this is typically "datasets/USER_OR_ORG/DATASET_NAME/PATH_IN_REPO".
+    persist_target_path = f"datasets/{HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}"
     index.storage_context.persist(persist_dir=persist_target_path) 
 
     print(f"Successfully created and persisted index to Hugging Face Dataset: {HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}")
