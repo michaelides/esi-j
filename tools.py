@@ -207,14 +207,14 @@ def get_rag_tool_for_agent():
                  fn=execute_rag_query,
                  name="rag_dissertation_retriever",
                  description=(
-                     f"Retrieves relevant information from the local dissertation knowledge base (persisted at '{persist_dir}'). "
-                     "Use this for specific institutional knowledge or previously saved research. "
-                     "The tool's output will include the textual answer and may be followed by structured references "
-                     "(e.g., to PDF files or web URLs) using '---RAG_SOURCE---' markers. "
-                     "For PDF sources, the structured reference will include a 'citation_number'. "
-                     "When you use information from a PDF source in your response, you MUST append its citation number "
-                     "in brackets (e.g., '[1]', '[2]') to the relevant sentence or claim. "
-                     "The query to the knowledge base should be provided as the 'input' string argument."
+                    f"Retrieves relevant information from the dissertation knowledge base (persisted on Hugging Face at '{HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}'). "
+                    "Use this for specific institutional knowledge or previously saved research. "
+                    "The tool's output will include the textual answer and may be followed by structured references "
+                    "(e.g., to PDF files or web URLs) using '---RAG_SOURCE---' markers. "
+                    "For PDF sources, the structured reference will include a 'citation_number'. "
+                    "When you use information from a PDF source in your response, you MUST append its citation number "
+                    "in brackets (e.g., '[1]', '[2]') to the relevant sentence or claim. "
+                    "The query to the knowledge base should be provided as the 'input' string argument."
                  ),
              )
         # The check for empty index is implicitly handled by the loading process.
