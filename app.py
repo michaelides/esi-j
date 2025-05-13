@@ -296,9 +296,8 @@ if __name__ == "__main__":
     if not os.getenv("GOOGLE_API_KEY"):
         st.warning("⚠️ GOOGLE_API_KEY environment variable not set. The agent may not work properly.")
 
-    # Update warning to check for the simple vector store path and suggest build command
-    # Use the resolved absolute path for the check
-    if not os.path.exists(DB_PATH) or not os.listdir(DB_PATH):
-        st.warning(f"⚠️ Local knowledge base not found or empty at '{DB_PATH}'. RAG features will be unavailable. Please run `python ragdb/make_rag.py` to build it.")
+    # The local DB_PATH check is no longer relevant as RAG loads from Hugging Face.
+    # if not os.path.exists(DB_PATH) or not os.listdir(DB_PATH):
+    #     st.warning(f"⚠️ Local knowledge base not found or empty at '{DB_PATH}'. RAG features will be unavailable. Please run `python ragdb/make_rag.py` to build it.")
 
     main()
