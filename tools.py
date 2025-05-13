@@ -15,8 +15,13 @@ from llama_index.core import VectorStoreIndex, StorageContext, load_index_from_s
 from llama_index.core.agent import FunctionCallingAgentWorker
 from llama_index.core import Settings
 from llama_index.tools.code_interpreter import CodeInterpreterToolSpec
+from huggingface_hub import HfFileSystem # Added for RAG from HF
 # from llama_index.core.tools.local_code_interpreter import LocalCodeInterpreter # Removed problematic import
 # from llama_index.tools.azure_code_interpreter import AzureCodeInterpreterToolSpec as CodeInterpreterToolSpec
+
+# --- Hugging Face RAG Configuration ---
+HF_DATASET_ID = "gm42/esi_simplevector"  # As used in make_rag.py
+HF_VECTOR_STORE_SUBDIR = "vector_store_data" # As used in make_rag.py
 
 # Determine project root based on the script's location
 # For tools.py directly in the 'esi' project root, PROJECT_ROOT is the directory of tools.py
@@ -106,33 +111,37 @@ def get_web_scraper_tool_for_agent():
         return []
 
 # Note: collection_name is no longer needed for SimpleVectorStore
-def get_rag_tool_for_agent(db_path="./ragdb/simple_vector_store"):
-    """Initializes the RAG query tool using a persisted SimpleVectorStore."""
-    # Resolve the relative db_path to an absolute path based on PROJECT_ROOT
-    persist_dir = os.path.join(PROJECT_ROOT, db_path)
-    print(f"Attempting to load RAG index from persistence directory: {persist_dir}")
-
-    # Check if the persistence directory exists
-    if not os.path.exists(persist_dir) or not os.listdir(persist_dir): # Check if dir exists and is not empty
-        print(f"Error: Persistence directory '{persist_dir}' not found or is empty.")
-        print("Please run 'python ragdb/make_rag.py' to build the local knowledge base.")
-        # Return a dummy tool indicating the store is missing
-        # The error message should refer to the relative path for clarity in instructions
-        return FunctionTool.from_defaults(
-            fn=lambda *args, **kwargs: f"Error: The local knowledge base was not found at '{db_path}'. Please ensure it has been created by running 'python ragdb/make_rag.py'.",
-            name="rag_dissertation_retriever",
-            description="The local dissertation knowledge base is currently unavailable because it has not been built or loaded."
-        )
+def get_rag_tool_for_agent():
+    """Initializes the RAG query tool by loading the SimpleVectorStore from Hugging Face Hub."""
+    
+    hf_persist_path = f"datasets/{HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}"
+    print(f"Attempting to load RAG index from Hugging Face Hub: {hf_persist_path}")
 
     try:
-        # Load the index from the persisted directory
+        # Initialize HfFileSystem
+        hf_token = os.getenv("HF_TOKEN")
+        if not hf_token:
+            print("Warning: HF_TOKEN environment variable not set. Make sure you are logged in via `huggingface-cli login` or have set HF_TOKEN for read access to the Hugging Face Dataset.")
+        
+        hf_fs = HfFileSystem(token=hf_token)
+
         # Ensure Settings.embed_model and Settings.llm are set globally before this
-        print("Loading index from storage...")
-        storage_context = StorageContext.from_defaults(persist_dir=persist_dir)
+        if not Settings.embed_model:
+            print("Error: Settings.embed_model not configured. Cannot load RAG index.")
+            # This should ideally be handled by an earlier settings initialization call.
+            raise ValueError("Settings.embed_model is not set.")
+        if not Settings.llm:
+            print("Error: Settings.llm not configured. Cannot create RAG query engine.")
+            raise ValueError("Settings.llm is not set.")
+
+        print("Loading index from Hugging Face storage...")
+        # StorageContext will use HfFileSystem to access the specified path
+        storage_context = StorageContext.from_defaults(persist_dir=hf_persist_path, fs=hf_fs)
+        
         # SimpleVectorStore is loaded automatically within the storage context
         # We need the embed_model to potentially reconstruct parts of the index if needed by LlamaIndex
         index = load_index_from_storage(storage_context, embed_model=Settings.embed_model)
-        print("Successfully loaded index from storage.")
+        print(f"Successfully loaded index from Hugging Face Hub: {hf_persist_path}")
 
         # Create a query engine from the loaded index
         # Ensure Settings.llm is set globally
@@ -212,15 +221,14 @@ def get_rag_tool_for_agent(db_path="./ragdb/simple_vector_store"):
         # If loading succeeds, we assume the index is usable.
 
     except Exception as e:
-        # The error message should refer to the relative path for clarity in instructions
-        error_message = f"Error initializing or loading RAG tool from '{db_path}': {e}"
+        error_message = f"Error initializing or loading RAG tool from Hugging Face ({HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}): {e}"
         print(error_message)
         # Return a dummy tool in case of loading error
         # Capture the error message in the lambda's default argument
         return FunctionTool.from_defaults(
             fn=lambda *args, msg=error_message, **kwargs: msg,
             name="rag_dissertation_retriever",
-            description="The local dissertation knowledge base is currently unavailable due to an error during initialization."
+            description=f"The dissertation knowledge base (from Hugging Face: {HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}) is currently unavailable due to an error during initialization."
         )
 
 
@@ -304,13 +312,10 @@ def get_coder_tools():
 
 
 #     try:
-#         # Update test path to point to the simple vector store directory
-#         test_db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ragdb', 'simple_vector_store'))
-#         print(f"Attempting to initialize RAG tool with test DB path: {test_db_path}")
-#         # get_rag_tool_for_agent now returns a single tool, not a list
-#         rag_tool = get_rag_tool_for_agent(db_path=test_db_path)
+#         # RAG tool now loads from Hugging Face, no db_path needed for testing here
+#         print(f"Attempting to initialize RAG tool (loads from Hugging Face: {HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR})")
+#         rag_tool = get_rag_tool_for_agent() # No db_path argument
 #         if rag_tool:
-#             # rag_tool = rag_tools_list[0] # No longer needed
 #             print(f"RAG Tool: {rag_tool.metadata.name} - {rag_tool.metadata.description[:60]}...")
 #             # Further testing of rag_tool.fn() or rag_tool.query_engine if applicable
 #         else:

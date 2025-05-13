@@ -153,11 +153,10 @@ Do not attempt to answer questions outside of this scope or use tools not provid
     )
     return AgentRunner(agent_worker)
 
-def create_rag_agent(db_path):
-    """Creates an agent specialized in RAG from a local knowledge base."""
-    # get_rag_tool_for_agent returns a single tool (FunctionTool)
-    # Removed collection_name argument as it's no longer needed for SimpleVectorStore
-    rag_tool_function = get_rag_tool_for_agent(db_path=db_path)
+def create_rag_agent():
+    """Creates an agent specialized in RAG, loading from Hugging Face Hub."""
+    # get_rag_tool_for_agent now loads from Hugging Face and does not take db_path
+    rag_tool_function = get_rag_tool_for_agent()
     if not rag_tool_function: # This function itself is the tool, not a list
         print("Warning: RAG tool failed to initialize. RAG Agent will be ineffective.")
         dummy_worker = FunctionCallingAgentWorker.from_tools([], llm=Settings.llm, verbose=True, system_prompt="I am a RAG agent but have no RAG tool.")
@@ -206,17 +205,20 @@ If there's an error during code execution, report it clearly.
     return AgentRunner(agent_worker)
 
 # --- Orchestrator Agent ---
-# Update default db_path to the new simple vector store persistence directory
-def create_orchestrator_agent(db_path="./ragdb/simple_vector_store"):
-    """Creates the Orchestrator Agent that delegates to specialized agents."""
+def create_orchestrator_agent():
+    """
+    Creates the Orchestrator Agent that delegates to specialized agents.
+    RAG agent will load its data from Hugging Face Hub.
+    """
     initialize_settings() # Ensure LLM settings are initialized
 
     # Initialize specialized agents
     search_agent = create_search_agent()
     lit_reviewer_agent = create_literature_reviewer_agent()
     scraper_agent = create_scraper_agent()
-    rag_agent_instance = create_rag_agent(db_path=db_path) # Renamed to avoid conflict
-    coder_agent_instance = create_coder_agent() # Renamed to avoid conflict
+    # RAG agent now loads from HF, no db_path needed
+    rag_agent_instance = create_rag_agent() 
+    coder_agent_instance = create_coder_agent()
 
     # Convert specialized agents into tools for the orchestrator
     # Create wrapper functions for each agent's chat method to ensure simple string input schema
@@ -384,11 +386,10 @@ Summarize the key points about W.
 #     load_dotenv()
 #     try:
 #         # Test Orchestrator Agent
-#         # Update test path to point to the simple vector store directory
-#         test_db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ragdb', 'simple_vector_store'))
-#         print(f"Using test DB path for RAG agent: {test_db_path}")
-
-#         orchestrator = create_orchestrator_agent(db_path=test_db_path)
+#         # RAG agent now loads from Hugging Face, no db_path needed for orchestrator
+#         print(f"Creating orchestrator agent (RAG agent will load from Hugging Face)")
+        
+#         orchestrator = create_orchestrator_agent() # No db_path argument
 #         print("Orchestrator agent created successfully.")
 
 #         # Example query for the orchestrator
