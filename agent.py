@@ -63,7 +63,10 @@ def generate_llm_greeting() -> str:
 
         # Use a simple prompt for a greeting
         # Using 'complete' for a single, non-chat generation
-        prompt = "Generate a single, short, friendly, and welcoming greeting message (1-2 sentences) for a user interacting with an AI assistant named ESI designed to help with university dissertations. Mention ESI by name. Provide only the greeting itself, with no extra text or options."
+        prompt = """Generate a single, short, friendly, and welcoming greeting message (1-2 sentences) 
+        for a user interacting with an AI assistant named ESI designed to help with university dissertations. 
+        Mention ESI by name. Provide only the greeting itself, and offer help to the user.
+        """ #   with no extra options."""
         response = llm.complete(prompt)
         greeting = response.text.strip()
 
@@ -275,7 +278,8 @@ def create_orchestrator_agent(db_path="./ragdb/simple_vector_store"):
         system_prompt_base = "You are ESI, an AI assistant for dissertation support."
 
     orchestrator_system_prompt = f"""{system_prompt_base}
-Your role is to understand the user's query and delegate tasks to a team of specialized expert agents to gather information, then synthesize a comprehensive final answer for the user.
+Your role is to understand the user's query and delegate tasks to a team of specialized expert agents to gather information, then synthesize a comprehensive 
+final answer for the user.
 You have access to the following expert agents as tools:
 *   `search_expert`: For general web searches, current events, or broad topics. Input should be the search query string.
 *   `literature_expert`: For finding academic papers and scholarly articles. Input should be the research query string.
