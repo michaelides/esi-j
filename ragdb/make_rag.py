@@ -6,7 +6,7 @@ from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, StorageCon
 from llama_index.core.node_parser import SentenceSplitter
 # from llama_index.vector_stores.chroma import ChromaVectorStore # Removed chromadb
 from llama_index.core.vector_stores import SimpleVectorStore # Added SimpleVectorStore
-from llama_index.core.storage.fs_store import HuggingFaceFS # Added for HF dataset storage
+from llama_index.storage.kvstore.huggingface import HuggingFaceFSStore # Added for HF dataset storage
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding # Added
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
@@ -276,8 +276,8 @@ async def main():
     print("Initializing SimpleVectorStore and HuggingFaceFS for persistence...")
     vector_store = SimpleVectorStore()
     
-    # Initialize HuggingFaceFS
-    hf_fs = HuggingFaceFS(
+    # Initialize HuggingFaceFSStore
+    hf_fs = HuggingFaceFSStore(
         repo_id=HF_DATASET_ID,
         path_in_repo=HF_VECTOR_STORE_SUBDIR, # Files will be stored under this path in the HF dataset
         token=os.getenv("HF_TOKEN") # Uses HF_TOKEN env var or login session
