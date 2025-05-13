@@ -6,13 +6,15 @@ from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, StorageCon
 from llama_index.core.node_parser import SentenceSplitter
 # from llama_index.vector_stores.chroma import ChromaVectorStore # Removed chromadb
 from llama_index.core.vector_stores import SimpleVectorStore # Added SimpleVectorStore
-from huggingface_hub import HfFileSystem # Added for HF dataset storage
+from huggingface_hub import HfApi # Changed from HfFileSystem to HfApi
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding # Added
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
 from crawl4ai.content_scraping_strategy import LXMLWebScrapingStrategy
 from dotenv import load_dotenv
 import sys # Import sys to check Python version if needed, or for sys.exit
+import tempfile # Added for temporary local persistence
+import shutil # Added for cleaning up temporary directory
 
 # Load environment variables from a .env file if it exists
 load_dotenv()
@@ -272,15 +274,12 @@ async def main():
     # Use LlamaIndex SentenceSplitter
     node_parser = SentenceSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
 
-    # 4. Initialize SimpleVectorStore and Storage Context
-    print("Initializing SimpleVectorStore and HuggingFaceFS for persistence...")
+    # 4. Initialize SimpleVectorStore and Storage Context for local persistence
+    print("Initializing SimpleVectorStore for local persistence...")
     vector_store = SimpleVectorStore()
     
-    # Initialize HfFileSystem
-    hf_fs = HfFileSystem(token=os.getenv("HF_TOKEN"))
-    # The repo_id and path_in_repo will be part of the persist_dir path later
-    
-    storage_context = StorageContext.from_defaults(vector_store=vector_store, fs=hf_fs)
+    # Storage context will persist locally first
+    storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
     # 5. Create VectorStoreIndex (This performs parsing, embedding, and indexing)
     # This approach processes all documents every time.
@@ -293,16 +292,42 @@ async def main():
         show_progress=True,
     )
 
-    # 6. Persist the index, vector store, and other data to Hugging Face Dataset
-    print(f"Persisting index to Hugging Face Dataset: {HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}...")
-    # When fs is provided in StorageContext, persist() writes to the fs.
-    # The persist_dir should be the path on Hugging Face Hub, usable by HfFileSystem.
-    # For datasets, this is typically "datasets/USER_OR_ORG/DATASET_NAME/PATH_IN_REPO".
-    persist_target_path = f"datasets/{HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}"
-    index.storage_context.persist(persist_dir=persist_target_path) 
+    # 6. Persist the index locally to a temporary directory
+    local_persist_dir = tempfile.mkdtemp()
+    print(f"Persisting index locally to temporary directory: {local_persist_dir}...")
+    try:
+        index.storage_context.persist(persist_dir=local_persist_dir)
+        print("Local persistence successful.")
 
-    print(f"Successfully created and persisted index to Hugging Face Dataset: {HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}")
-    # Verification is implicit in successful persistence.
+        # 7. Upload the persisted data to Hugging Face Dataset
+        print(f"Uploading persisted index to Hugging Face Dataset: {HF_DATASET_ID}, path in repo: {HF_VECTOR_STORE_SUBDIR}...")
+        hf_token = os.getenv("HF_TOKEN")
+        if not hf_token:
+            print("Warning: HF_TOKEN not set. Upload to Hugging Face Hub will likely fail or use cached credentials.")
+            # Depending on huggingface_hub's behavior, this might still work if user is logged in via CLI
+
+        api = HfApi(token=hf_token)
+        api.upload_folder(
+            folder_path=local_persist_dir,
+            repo_id=HF_DATASET_ID,
+            path_in_repo=HF_VECTOR_STORE_SUBDIR,
+            repo_type="dataset",
+            # Set commit_message, create_pr, etc. as needed.
+            # Using allow_patterns to upload all files and subdirectories.
+            # Or, if specific files are known, list them. For SimpleVectorStore, it's usually a few JSON files.
+            # Example: allow_patterns=["*.json", "docstore/*"] - adjust if SimpleVectorStore structure is different.
+            # For now, uploading everything in the temp dir.
+        )
+        print(f"Successfully uploaded index to Hugging Face Dataset: {HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}")
+
+    except Exception as e:
+        print(f"An error occurred during local persistence or upload: {e}")
+        # Consider re-raising or specific error handling
+    finally:
+        # Clean up the temporary directory
+        if os.path.exists(local_persist_dir):
+            print(f"Cleaning up temporary local persistence directory: {local_persist_dir}")
+            shutil.rmtree(local_persist_dir)
 
     print("RAG database creation script finished.")
 
