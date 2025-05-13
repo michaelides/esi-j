@@ -237,6 +237,7 @@ def main():
         # Add a blank option at the beginning
         options=[""] + st.session_state.suggested_prompts,
         key="selected_prompt_dropdown", # Unique key for the selectbox state
+        placeholder="Select a suggested prompt...",
         on_change=set_selected_prompt_from_dropdown # Set the callback function
     )
 
