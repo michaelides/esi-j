@@ -140,9 +140,9 @@ def create_scraper_agent():
         return AgentRunner(dummy_worker)
 
     system_prompt = """You are a specialized web scraper agent.
-Your sole purpose is to use the web_scraper tool to fetch the main textual content from a given URL.
+Your sole purpose is to use the web_scraper tool to fetch the main textual content from a given URL. This could be an HTML webpage or a direct link to a PDF document.
 The input to you will be the URL to scrape.
-Return the scraped text. If you encounter an error (e.g., URL not accessible, no content found), report the error clearly.
+Return the scraped text. If you encounter an error (e.g., URL not accessible, no content found, or PDF unreadable), report the error clearly.
 Do not attempt to answer questions outside of this scope or use tools not provided."""
     
     agent_worker = FunctionCallingAgentWorker.from_tools(

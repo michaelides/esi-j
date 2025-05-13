@@ -6,7 +6,7 @@ from llama_index.core.tools import FunctionTool, QueryEngineTool
 # from llama_index.core.vector_stores import VectorStoreInfo # Not used directly now
 # from llama_index.vector_stores.chroma import ChromaVectorStore # Removed chromadb
 from llama_index.core.vector_stores import SimpleVectorStore # Added for type hinting if needed
-from llama_index.readers.web import BeautifulSoupWebReader
+from llama_index.readers.web import SimpleWebPageReader # Changed from BeautifulSoupWebReader
 from llama_index.readers.semanticscholar import SemanticScholarReader
 from llama_index.tools.wikipedia import WikipediaToolSpec
 from llama_index.tools.tavily_research import TavilyToolSpec
@@ -99,11 +99,12 @@ def get_web_scraper_tool_for_agent():
     Returns a list containing the tool, suitable for an agent.
     """
     try:
-        loader = BeautifulSoupWebReader()
+        # SimpleWebPageReader can handle HTML and attempt to load PDFs from URLs
+        loader = SimpleWebPageReader(html_to_text=True) # html_to_text for cleaner HTML scraping
         tool = FunctionTool.from_defaults(
             fn=lambda url: loader.load_data(urls=[url]),
             name="web_scraper",
-            description="Scrapes content from a given URL. Expects a single URL as input.",
+            description="Scrapes textual content from a given URL. This can be an HTML webpage or a direct link to a PDF document. Expects a single URL as input.",
         )
         return [tool] if tool else []
     except Exception as e:
