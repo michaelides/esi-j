@@ -353,3 +353,46 @@ def get_coder_tools():
 
 #     except Exception as e:
 #         print(f"Error during tools testing: {e}")
+
+
+def get_all_tools():
+    """
+    Collects all available tools from the various getter functions.
+    Returns a flat list of tools.
+    """
+    all_tools = []
+
+    # 1. Search tools
+    search_tools = get_search_tools()
+    if search_tools:  # Ensure it's not None
+        all_tools.extend(search_tools)
+
+    # 2. Semantic Scholar tool
+    semantic_scholar_tools = get_semantic_scholar_tool_for_agent()
+    if semantic_scholar_tools:  # Ensure it's not None
+        all_tools.extend(semantic_scholar_tools)
+
+    # 3. Web Scraper tool
+    web_scraper_tools = get_web_scraper_tool_for_agent()
+    if web_scraper_tools:  # Ensure it's not None
+        all_tools.extend(web_scraper_tools)
+
+    # 4. RAG tool
+    rag_tool = get_rag_tool_for_agent()
+    if rag_tool:  # Ensure it's not None
+        all_tools.append(rag_tool)
+
+    # 5. Coder tools
+    coder_tools = get_coder_tools()
+    if coder_tools:  # Ensure it's not None
+        all_tools.extend(coder_tools)
+
+    # 8. Print collected tool names
+    tool_names = [
+        tool.metadata.name 
+        for tool in all_tools 
+        if hasattr(tool, 'metadata') and hasattr(tool.metadata, 'name')
+    ]
+    print(f"Collected tools: {tool_names}")
+
+    return all_tools

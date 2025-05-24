@@ -11,8 +11,8 @@ import re # Import regex module for parsing code blocks and markers
 from typing import List, Dict, Any
 from llama_index.core.llms import ChatMessage, MessageRole # Import necessary types
 import stui
-# Import initialize_settings and alias it, and the new orchestrator agent creator
-from agent import create_orchestrator_agent, generate_suggested_prompts, SUGGESTED_PROMPT_COUNT, DEFAULT_PROMPTS, initialize_settings as initialize_agent_settings, generate_llm_greeting
+# Import initialize_settings and alias it, and the new unified agent creator
+from agent import create_unified_agent, generate_suggested_prompts, SUGGESTED_PROMPT_COUNT, DEFAULT_PROMPTS, initialize_settings as initialize_agent_settings, generate_llm_greeting
 # UI_ACCESSIBLE_WORKSPACE is now primarily managed within tools.py and coder agent
 # from tools import UI_ACCESSIBLE_WORKSPACE
 # PERSISTENT_SESSIONS_DIR = "./persistent_sessions" # Removed
@@ -40,7 +40,7 @@ st.set_page_config(
 # Use path relative to PROJECT_ROOT
 SIMPLE_STORE_PATH_RELATIVE = os.getenv("SIMPLE_STORE_PATH", "ragdb/simple_vector_store")
 DB_PATH = os.path.join(PROJECT_ROOT, SIMPLE_STORE_PATH_RELATIVE) # Resolve to absolute path at runtime
-AGENT_SESSION_KEY = "esi_orchestrator_agent" # Key for storing orchestrator agent
+AGENT_SESSION_KEY = "esi_unified_agent" # Key for storing unified agent
 # CODE_INTERPRETER_TOOL_NAME = "code_interpreter" # Managed by Coder Agent
 # RAG_TOOL_NAME = "rag_dissertation_retriever" # Managed by RAG Agent, tool name for orchestrator is "rag_expert"
 DOWNLOAD_MARKER = "---DOWNLOAD_FILE---" # Used by stui.py for display
@@ -48,16 +48,16 @@ RAG_SOURCE_MARKER_PREFIX = "---RAG_SOURCE---" # Used by stui.py for display
 
 # --- Agent Initialization ---
 def initialize_agent():
-    """Initializes the orchestrator agent and stores it in session state."""
+    """Initializes the unified agent and stores it in session state."""
     if AGENT_SESSION_KEY not in st.session_state:
-        print("Initializing orchestrator agent for new session (LLM settings should already be done)...")
+        print("Initializing unified agent for new session (LLM settings should already be done)...")
         try:
-            # create_orchestrator_agent uses the globally initialized Settings.llm
+            # create_unified_agent uses the globally initialized Settings.llm
             # and now loads RAG data from Hugging Face Hub, so db_path is not needed.
-            st.session_state[AGENT_SESSION_KEY] = create_orchestrator_agent()
-            print("Orchestrator agent object initialized successfully.")
+            st.session_state[AGENT_SESSION_KEY] = create_unified_agent()
+            print("Unified agent object initialized successfully.")
         except Exception as e:
-            print(f"Error initializing orchestrator agent: {e}")
+            print(f"Error initializing unified agent: {e}")
             st.error(f"Failed to initialize the AI agent. Please check configurations. Error: {e}")
             st.stop() # Stop execution if agent fails to initialize
 
@@ -130,14 +130,14 @@ def get_agent_response(query: str, chat_history: List[ChatMessage]) -> str:
         # in the orchestrator's final response_text if it used information from the RAG expert.
         # The previous logic for extracting from response.sources can be a fallback,
         # but the primary expectation is that response_text is complete.
-        # For now, we rely on the orchestrator's prompt to ensure this.
+        # For now, we rely on the unified agent's prompt to ensure this.
 
-        print(f"Orchestrator final response text for UI: \n{response_text[:500]}...") # Log snippet
+        print(f"Unified agent final response text for UI: \n{response_text[:500]}...") # Log snippet
         return response_text
 
     except Exception as e:
         # Log the error and return a friendly message
-        print(f"Error getting orchestrator agent response: {e}")
+        print(f"Error getting unified agent response: {e}")
         print(f"Error getting agent response: {e}")
         return f"I apologize, but I encountered an error while processing your request. Please try again or rephrase your question. Technical details: {str(e)}"
 
