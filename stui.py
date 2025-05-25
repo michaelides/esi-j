@@ -47,7 +47,8 @@ def display_chat():
                 # Regex to find all RAG source markers and capture the JSON string
                 # It looks for the marker, then captures everything until a newline or end of string.
                 # It also handles potential whitespace/newlines after the marker.
-                rag_source_pattern = re.compile(rf"{re.escape(RAG_SOURCE_MARKER)}\s*(\{.*?\})\s*(?:\n|$)", re.DOTALL)
+                # Double curly braces {{ and }} are used to include literal { and } in the f-string.
+                rag_source_pattern = re.compile(rf"{re.escape(RAG_SOURCE_MARKER)}\s*({{.*?}})\s*(?:\n|$)", re.DOTALL)
                 
                 # Find all matches
                 matches = list(rag_source_pattern.finditer(content))
