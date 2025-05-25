@@ -2,27 +2,22 @@ import os
 import random
 from llama_index.core import Settings
 from llama_index.llms.gemini import Gemini
-from llama_index.embeddings.google_genai import GoogleGenAIEmbedding # Added
+from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 from llama_index.core.agent import AgentRunner, FunctionCallingAgentWorker
-# from llama_index.core.agent.types import AgentChatResponse # Removed problematic import
-from typing import Any # Added for generic type hinting
 from llama_index.core.tools import FunctionTool
-# from llama_index.core.agent.workflow import ReActAgent # Keep if ReAct is an option later
-from google.genai import types # Ensure this import is present
-from tools import get_all_tools # Replaced specific imports
-from dotenv import load_dotenv
 from llama_index.core.llms import LLM # Import base LLM type for type hinting
+from tools import get_all_tools
+from dotenv import load_dotenv
 
 load_dotenv()
 
 # Determine project root based on the script's location
-# For agent.py directly in the 'esi' project root, PROJECT_ROOT is the directory of agent.py
+# For agent.py directly in the 'esi' project root, PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 
 # --- Constants ---
 SUGGESTED_PROMPT_COUNT = 4
-#llm = Gemini(model_name="models/gemini-2.5-flash-preview-04-17", api_key=os.getenv("GOOGLE_API_KEY"))
 
 # --- Global Settings ---
 def initialize_settings():
@@ -46,10 +41,7 @@ def generate_llm_greeting() -> str:
     """Generates a dynamic greeting message using the configured LLM."""
     static_fallback = "Hello! I'm ESI, your AI assistant for dissertation support. How can I help you today?"
     try:
-        # Ensure settings are initialized (might be redundant if called elsewhere first, but safe)
-        if not Settings.llm:
-            initialize_settings()
-
+        # Settings.llm is guaranteed to be initialized by app.py before this function is called
         llm = Settings.llm
         if not isinstance(llm, LLM): # Basic check
              print("Warning: LLM not configured correctly for greeting generation.")
@@ -60,7 +52,7 @@ def generate_llm_greeting() -> str:
         prompt = """Generate a single, short, friendly, and welcoming greeting message (1-2 sentences) 
         for a user interacting with an AI assistant named ESI designed to help with university dissertations. 
         Mention ESI by name. Provide only the greeting itself, and offer help to the user.
-        """ #   with no extra options."""
+        """
         response = llm.complete(prompt)
         greeting = response.text.strip()
 
@@ -82,16 +74,12 @@ def create_unified_agent():
     """
     Creates a unified agent with all available tools and a comprehensive system prompt.
     """
-    initialize_settings()  # Ensure LLM settings are initialized
+    # initialize_settings() # Settings are initialized once in app.py main function
 
     all_tools = get_all_tools() # Get all tools from tools.py
 
     if not all_tools:
-        # This case should ideally be handled by get_all_tools itself if it's critical
         print("CRITICAL: No tools were loaded by get_all_tools(). Unified agent may be non-functional.")
-        # Fallback: create an agent with no tools, or raise an error
-        # For now, let's allow it to proceed but it will be very limited.
-        # all_tools = [] # Ensure it's an empty list if None was returned
 
     try:
         with open("esi_agent_instruction.md", "r") as f:
@@ -127,11 +115,7 @@ def generate_suggested_prompts(chat_history):
      """
      # --- LLM-based Generation ---
     try:
-        # Ensure LLM is initialized
-        if not Settings.llm:
-            print("Warning: LLM not initialized for suggested prompts. Returning defaults.")
-            return DEFAULT_PROMPTS
-
+        # Settings.llm is guaranteed to be initialized by app.py before this function is called
         llm = Settings.llm
 
         # Create context from the last few messages (e.g., last 4)

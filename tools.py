@@ -1,23 +1,16 @@
 import os
-# import chromadb # Removed chromadb
 import json # Added for RAG source formatting
 
-from llama_index.core.tools import FunctionTool, QueryEngineTool
-# from llama_index.core.vector_stores import VectorStoreInfo # Not used directly now
-# from llama_index.vector_stores.chroma import ChromaVectorStore # Removed chromadb
-from llama_index.core.vector_stores import SimpleVectorStore # Added for type hinting if needed
-from llama_index.readers.web import SimpleWebPageReader # Changed from BeautifulSoupWebReader
+from llama_index.core.tools import FunctionTool
+from llama_index.readers.web import SimpleWebPageReader
 from llama_index.readers.semanticscholar import SemanticScholarReader
 from llama_index.tools.wikipedia import WikipediaToolSpec
 from llama_index.tools.tavily_research import TavilyToolSpec
-from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec # Corrected import name if needed, ensure library provides this
-from llama_index.core import VectorStoreIndex, StorageContext, load_index_from_storage # Added load_index_from_storage
-from llama_index.core.agent import FunctionCallingAgentWorker
+from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec
+from llama_index.core import VectorStoreIndex, StorageContext, load_index_from_storage
 from llama_index.core import Settings
 from llama_index.tools.code_interpreter import CodeInterpreterToolSpec
-from huggingface_hub import HfFileSystem # Added for RAG from HF
-# from llama_index.core.tools.local_code_interpreter import LocalCodeInterpreter # Removed problematic import
-# from llama_index.tools.azure_code_interpreter import AzureCodeInterpreterToolSpec as CodeInterpreterToolSpec
+from huggingface_hub import HfFileSystem
 
 # --- Hugging Face RAG Configuration ---
 HF_DATASET_ID = "gm42/esi_simplevector"  # As used in make_rag.py
@@ -111,7 +104,6 @@ def get_web_scraper_tool_for_agent():
         print(f"Error initializing Web Scraper Tool: {e}")
         return []
 
-# Note: collection_name is no longer needed for SimpleVectorStore
 def get_rag_tool_for_agent():
     """Initializes the RAG query tool by loading the SimpleVectorStore from Hugging Face Hub."""
     
@@ -129,7 +121,6 @@ def get_rag_tool_for_agent():
         # Ensure Settings.embed_model and Settings.llm are set globally before this
         if not Settings.embed_model:
             print("Error: Settings.embed_model not configured. Cannot load RAG index.")
-            # This should ideally be handled by an earlier settings initialization call.
             raise ValueError("Settings.embed_model is not set.")
         if not Settings.llm:
             print("Error: Settings.llm not configured. Cannot create RAG query engine.")
@@ -189,9 +180,7 @@ def get_rag_tool_for_agent():
                                  url = metadata['url']
                                  title = metadata.get('title', url) # Use title if available, else URL
                                  source_data = {"type": "web", "url": url, "title": title, "snippet": node_text_snippet + "..."}
-                                 # No citation number for web links in this iteration, can be added if needed
                                  sources_info_parts.append(f"---RAG_SOURCE---{json.dumps(source_data)}")
-                             # Add more conditions here if other metadata keys indicate different source types
 
                      # Append source markers to the text response
                      if sources_info_parts:
@@ -218,8 +207,6 @@ def get_rag_tool_for_agent():
                     "The query to the knowledge base should be provided as the 'input' string argument."
                  ),
              )
-        # The check for empty index is implicitly handled by the loading process.
-        # If loading succeeds, we assume the index is usable.
 
     except Exception as e:
         error_message = f"Error initializing or loading RAG tool from Hugging Face ({HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR}): {e}"
@@ -248,9 +235,6 @@ def get_search_tools():
     
     print(f"Initialized {len(tools)} search tools.")
     return tools
-
-# Note: get_semantic_scholar_tool_for_agent, get_web_scraper_tool_for_agent, 
-# and get_rag_tool_for_agent already return lists of tools (or a single tool in a list).
 
 # --- Code Interpreter Tool Setup ---
 
@@ -288,73 +272,6 @@ def get_coder_tools():
         print(f"Error initializing Code Interpreter Tool for Coder Agent: {e}. Code execution will be unavailable.")
         return []
 
-# if __name__ == '__main__':
-#     # Example usage (for testing)
-#     # Ensure UI_ACCESSIBLE_WORKSPACE exists for testing code interpreter
-#     os.makedirs(UI_ACCESSIBLE_WORKSPACE, exist_ok=True)
-#     from dotenv import load_dotenv
-#     # Need to import Settings here for the test block to work
-#     from llama_index.core import Settings
-#     from llama_index.llms.gemini import Gemini
-#     from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-
-#     load_dotenv()
-
-#     # Initialize Settings for testing purposes
-#     google_api_key = os.getenv("GOOGLE_API_KEY")
-#     if not google_api_key:
-#         print("Warning: GOOGLE_API_KEY not found for testing.")
-#         # Provide dummy settings if key is missing, or skip test
-#         Settings.llm = None # Or a dummy LLM
-#         Settings.embed_model = None # Or a dummy embedding
-#     else:
-#         Settings.llm = Gemini(model_name="models/gemini-1.5-flash-latest", api_key=google_api_key) # Use a test model
-#         Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
-
-
-#     try:
-#         # RAG tool now loads from Hugging Face, no db_path needed for testing here
-#         print(f"Attempting to initialize RAG tool (loads from Hugging Face: {HF_DATASET_ID}/{HF_VECTOR_STORE_SUBDIR})")
-#         rag_tool = get_rag_tool_for_agent() # No db_path argument
-#         if rag_tool:
-#             print(f"RAG Tool: {rag_tool.metadata.name} - {rag_tool.metadata.description[:60]}...")
-#             # Further testing of rag_tool.fn() or rag_tool.query_engine if applicable
-#         else:
-#             print("RAG tool failed to initialize.")
-
-#         print("\nInitializing search tools...")
-#         search_tools_list = get_search_tools()
-#         for tool in search_tools_list:
-#             print(f"- Search Tool: {tool.metadata.name}")
-
-#         print("\nInitializing literature reviewer tool...")
-#         lit_tools_list = get_semantic_scholar_tool_for_agent()
-#         if lit_tools_list:
-#             print(f"- Lit Review Tool: {lit_tools_list[0].metadata.name}")
-        
-#         print("\nInitializing scraper tool...")
-#         scraper_tools_list = get_web_scraper_tool_for_agent()
-#         if scraper_tools_list:
-#             print(f"- Scraper Tool: {scraper_tools_list[0].metadata.name}")
-
-#         print("\nInitializing coder tools...")
-#         coder_tools_list = get_coder_tools()
-#         for tool in coder_tools_list:
-#             print(f"- Coder Tool: {tool.metadata.name}")
-#         # Example: Test coder tool if it's a FunctionTool that can be called directly
-#         # if coder_tools_list and hasattr(coder_tools_list[0], 'fn'):
-#         #     try:
-#         #         print("\nAttempting Coder Tool Test (e.g., simple print)...")
-#         #         output = coder_tools_list[0].fn("print('Hello from Coder Agent Test')")
-#         #         print("Coder Tool Test Output:", output) # Output structure depends on CodeInterpreterOutput
-#         #     except Exception as code_e:
-#         #         print(f"Error during Coder tool test: {code_e}")
-
-
-#     except Exception as e:
-#         print(f"Error during tools testing: {e}")
-
-
 def get_all_tools():
     """
     Collects all available tools from the various getter functions.
@@ -364,27 +281,27 @@ def get_all_tools():
 
     # 1. Search tools
     search_tools = get_search_tools()
-    if search_tools:  # Ensure it's not None
+    if search_tools:
         all_tools.extend(search_tools)
 
     # 2. Semantic Scholar tool
     semantic_scholar_tools = get_semantic_scholar_tool_for_agent()
-    if semantic_scholar_tools:  # Ensure it's not None
+    if semantic_scholar_tools:
         all_tools.extend(semantic_scholar_tools)
 
     # 3. Web Scraper tool
     web_scraper_tools = get_web_scraper_tool_for_agent()
-    if web_scraper_tools:  # Ensure it's not None
+    if web_scraper_tools:
         all_tools.extend(web_scraper_tools)
 
     # 4. RAG tool
     rag_tool = get_rag_tool_for_agent()
-    if rag_tool:  # Ensure it's not None
+    if rag_tool:
         all_tools.append(rag_tool)
 
     # 5. Coder tools
     coder_tools = get_coder_tools()
-    if coder_tools:  # Ensure it's not None
+    if coder_tools:
         all_tools.extend(coder_tools)
 
     # 8. Print collected tool names
