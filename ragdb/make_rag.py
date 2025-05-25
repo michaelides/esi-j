@@ -1,7 +1,7 @@
 import os
 import asyncio
 from urllib.parse import urlparse
-import re # Import the 're' module for regular expressions
+import re
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, StorageContext
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.vector_stores import SimpleVectorStore

@@ -5,14 +5,13 @@ from llama_index.llms.gemini import Gemini
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 from llama_index.core.agent import AgentRunner, FunctionCallingAgentWorker
 from llama_index.core.tools import FunctionTool
-from llama_index.core.llms import LLM # Import base LLM type for type hinting
+from llama_index.core.llms import LLM
 from tools import get_all_tools
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # Determine project root based on the script's location
-# For agent.py directly in the 'esi' project root, PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 
@@ -27,7 +26,6 @@ def initialize_settings():
         raise ValueError("GOOGLE_API_KEY not found in environment variables.")
 
     # Use Google Generative AI Embeddings
-    # Default model is "models/embedding-001", ensure GOOGLE_API_KEY is set
     Settings.embed_model = GoogleGenAIEmbedding(model_name="models/text-embedding-004", api_key=google_api_key)
     # Use a potentially more stable model name and set a default temperature
     # The temperature can be overridden later based on the slider
@@ -74,8 +72,6 @@ def create_unified_agent():
     """
     Creates a unified agent with all available tools and a comprehensive system prompt.
     """
-    # initialize_settings() # Settings are initialized once in app.py main function
-
     all_tools = get_all_tools() # Get all tools from tools.py
 
     if not all_tools:
@@ -162,34 +158,10 @@ Summarize the key points about W.
 
 
 if __name__ == '__main__':
-    # Example usage (for testing)
     from dotenv import load_dotenv
     load_dotenv()
     try:
-        # Test Unified Agent
-        # print(f"Creating unified agent...")
-        # unified_agent = create_unified_agent()
-        # print("Unified agent created successfully.")
-
-        # Example query for the unified agent
-        # response = unified_agent.chat("Find recent papers on AI in education and summarize one using semantic_scholar_search then web_scraper for details if needed.")
-        # print("\nUnified Agent Response:", response)
-
-        # response_rag = unified_agent.chat("What is the university policy on plagiarism? (uses rag_dissertation_retriever)")
-        # print("\nUnified Agent RAG Response:", response_rag)
-        
-        # response_code = unified_agent.chat("Generate a simple plot of y=x^2 and save it as plot.png using code_interpreter")
-        # print("\nUnified Agent Coder Response:", response_code)
-        # Check ./code_interpreter_ws/plot.png after this
-
-        # Test prompt generation (still uses global Settings.llm)
-        # sample_history = [
-        #     {"role": "user", "content": "Tell me about research ethics."},
-        #     {"role": "assistant", "content": "Research ethics involves principles like informed consent..."}
-        # ]
-        # prompts = generate_suggested_prompts(sample_history)
-        # print("\nSuggested Prompts:", prompts)
-        pass # Content of try block commented out as requested
+        pass
 
     except Exception as e:
         print(f"Error during agent testing: {e}")

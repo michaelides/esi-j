@@ -1,11 +1,10 @@
 import streamlit as st
 import os
-import re # Import regex module
-import json # Added for parsing RAG source JSON
+import re
+import json
 from agent import generate_llm_greeting, DEFAULT_PROMPTS
 
 # Determine project root based on the script's location
-# For stui.py directly in the 'esi' project root, PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 

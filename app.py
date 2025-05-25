@@ -9,7 +9,6 @@ from agent import create_unified_agent, generate_suggested_prompts, initialize_s
 from dotenv import load_dotenv
 
 # Determine project root based on the script's location
-# For app.py directly in the 'esi' project root, PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 # Load environment variables
