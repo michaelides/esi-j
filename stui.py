@@ -205,18 +205,6 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
             st.session_state._create_new_discussion_session()
             # st.rerun() is called by _create_new_discussion_session
 
-        # Removed the old "Current Discussion Title" editing block
-        # This block is now replaced by inline editing in the "Your Discussions" list below.
-        # if st.session_state.editing_discussion_title:
-        #     st.text_input(...)
-        #     if st.button("✅ Done Editing", ...):
-        #         st.session_state.editing_discussion_title = False
-        #         st.rerun()
-        # else:
-        #     if st.button(f"### {st.session_state.current_discussion_title}", ...):
-        #         st.session_state.editing_discussion_title = True
-        #         st.rerun()
-
         st.subheader("Your Discussions")
         if not st.session_state.discussion_list:
             st.info("No discussions yet. Start a new one!")
@@ -224,11 +212,10 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
             for discussion in st.session_state.discussion_list:
                 is_current = (discussion["id"] == st.session_state.current_discussion_id)
                 
-                # Use columns for layout: title/input and delete button
-                # Adjust column width for better display of title and delete button
-                col1, col2 = st.columns([0.8, 0.2])
+                # Use columns for layout: title/input and options popover
+                col_title, col_options = st.columns([0.8, 0.2])
 
-                with col1:
+                with col_title:
                     if st.session_state.editing_list_discussion_id == discussion['id']:
                         # Display text input for editing
                         st.text_input(
@@ -238,43 +225,55 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                             on_change=lambda disc_id=discussion['id']: st.session_state._update_listed_discussion_title(disc_id),
                             label_visibility="collapsed" # Hide default label
                         )
-                        # Add a "Done" button to exit edit mode for this specific item
-                        if st.button("✅ Done", key=f"done_edit_{discussion['id']}", use_container_width=True):
-                            st.session_state.editing_list_discussion_id = None
-                            st.rerun()
+                        # No "Done" button here, as the popover will handle exiting edit mode
+                        # or clicking another discussion will exit it.
+                        # The on_change saves automatically.
                     else:
-                        # Display title as a button (for loading or initiating edit)
-                        # Use markdown to style the button label, especially for the current discussion
+                        # Display title as a button (for loading or initiating edit via popover)
                         button_label = f"**▶️ {discussion['title']}**" if is_current else discussion['title']
-                        if st.button(button_label, key=f"select_or_edit_{discussion['id']}", use_container_width=True):
-                            if is_current:
-                                # If current, click toggles edit mode for this item
-                                st.session_state.editing_list_discussion_id = discussion['id']
-                            else:
-                                # If not current, click loads the discussion
+                        if st.button(button_label, key=f"select_discussion_{discussion['id']}", use_container_width=True):
+                            # If not current, click loads the discussion
+                            if not is_current:
                                 st.session_state._load_discussion_session(discussion['id'])
+                            # If current, clicking the title button does nothing directly,
+                            # editing is handled via the popover.
+                            st.rerun() # Rerun to update UI state
+
+                with col_options:
+                    # Popover for options
+                    with st.popover("⚙️", use_container_width=True, key=f"options_popover_{discussion['id']}"):
+                        st.write(f"Options for: **{discussion['title']}**")
+                        
+                        # Option to edit title
+                        if st.button("✏️ Edit Title", key=f"edit_from_popover_{discussion['id']}", use_container_width=True):
+                            st.session_state.editing_list_discussion_id = discussion['id']
                             st.rerun()
-                
-                with col2:
-                    # Delete button for each listed discussion
-                    # Ensure the delete button is aligned and visible
-                    if st.button("🗑️", key=f"delete_listed_{discussion['id']}", help=f"Delete '{discussion['title']}'"):
-                        # This will delete the specific discussion clicked
-                        st.session_state._delete_current_discussion(discussion['id']) # Pass the ID to delete
-                        # st.rerun() is called by _delete_current_discussion
+                        
+                        # Option to download
+                        st.download_button(
+                            label="⬇️ Download as Markdown",
+                            data=st.session_state._get_discussion_markdown(discussion['id']), # New function call
+                            file_name=f"{discussion['title'].replace(' ', '_')}.md",
+                            mime="text/markdown",
+                            key=f"download_listed_{discussion['id']}",
+                            use_container_width=True
+                        )
+                        
+                        # Option to delete
+                        if st.button("🗑️ Delete", key=f"delete_from_popover_{discussion['id']}", use_container_width=True):
+                            st.session_state._delete_current_discussion(discussion['id'])
+                            # st.rerun() is called by _delete_current_discussion
 
         st.markdown("---")
-        st.subheader("Download Current Discussion")
-        st.download_button(
-            label="Download as Markdown",
-            data=_get_chat_as_markdown(),
-            file_name=f"{st.session_state.current_discussion_title.replace(' ', '_')}.md", # Standardized name
-            mime="text/markdown",
-            key="download_markdown_button"
-        )
-        # Placeholder for other download options
-        # st.button("Download as PDF (Coming Soon)", disabled=True)
-        # st.button("Download as DOCX (Coming Soon)", disabled=True)
+        # Removed the global download button as it's now per-discussion in the popover
+        # st.subheader("Download Current Discussion")
+        # st.download_button(
+        #     label="Download as Markdown",
+        #     data=_get_chat_as_markdown(),
+        #     file_name=f"{st.session_state.current_discussion_title.replace(' ', '_')}.md",
+        #     mime="text/markdown",
+        #     key="download_markdown_button"
+        # )
 
         st.divider()
 
