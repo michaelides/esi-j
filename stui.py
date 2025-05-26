@@ -240,8 +240,8 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                             st.rerun() # Rerun to update UI state
 
                 with col_options:
-                    # Popover for options
-                    with st.popover("⚙️", use_container_width=True, key=f"options_popover_{discussion['id']}"):
+                    # Popover for options - Changed icon to vertical ellipsis
+                    with st.popover("⋮", use_container_width=True, key=f"options_popover_{discussion['id']}"):
                         st.write(f"Options for: **{discussion['title']}**")
                         
                         # Option to edit title
