@@ -75,19 +75,9 @@ def init_session_state_for_app():
     if "next_research_idea_number" not in st.session_state:
         st.session_state.next_research_idea_number = 1
 
+    if "do_regenerate" not in st.session_state:
+        st.session_state.do_regenerate = False
 
-# --- Agent Initialization ---
-def initialize_agent():
-    """Initializes the unified agent and stores it in session state."""
-    if AGENT_SESSION_KEY not in st.session_state:
-        print("Initializing unified agent for new session (LLM settings should already be done)...")
-        try:
-            st.session_state[AGENT_SESSION_KEY] = create_unified_agent()
-            print("Unified agent object initialized successfully.")
-        except Exception as e:
-            print(f"Error initializing unified agent: {e}")
-            st.error(f"Failed to initialize the AI agent. Please check configurations. Error: {e}")
-            st.stop() # Stop execution if agent fails to initialize
 
 # --- Helper Function for History Formatting ---
 def format_chat_history(streamlit_messages: list[dict[str, Any]]) -> list[ChatMessage]:
@@ -254,11 +244,13 @@ def _refresh_discussion_list():
         st.session_state.discussion_list = []
 
 # Expose these functions to st.session_state so stui.py can call them
+# This block MUST be before stui.create_interface() call
 st.session_state._create_new_discussion_session = _create_new_discussion_session
 st.session_state._load_discussion_session = _load_discussion_session
 st.session_state._save_current_discussion = _save_current_discussion
-st.session_state._delete_current_discussion = _delete_current_discussion
+st.session_state._delete_current_discussion = _delete_discussion
 st.session_state._refresh_discussion_list = _refresh_discussion_list
+st.session_state.handle_regeneration_request = handle_regeneration_request # Expose for stui.py
 
 
 # --- UI Callbacks ---
@@ -319,56 +311,47 @@ def main():
     """Main function to run the Streamlit app."""
     init_session_state_for_app()
 
-    # --- Initialize LLM Settings FIRST ---
-    try:
-        print("Initializing LLM settings...")
-        initialize_agent_settings()
-        print("LLM settings initialized.")
-    except Exception as e:
-        st.error(f"Fatal Error: Could not initialize LLM settings. {e}")
-        st.stop()
-    # --- End LLM Settings Initialization ---
+    # --- Initialize LLM Settings (cached in agent.py) ---
+    initialize_agent_settings()
 
-    # Initialize agent (stores it in session state)
-    initialize_agent()
+    # --- Initialize Unified Agent (cached in agent.py) ---
+    if AGENT_SESSION_KEY not in st.session_state:
+        st.session_state[AGENT_SESSION_KEY] = create_unified_agent()
 
     # --- User Identification (Cookie-based) ---
-    if "user_id" not in st.session_state or st.session_state.user_id is None: # Changed from user_info
+    if "user_id" not in st.session_state or st.session_state.user_id is None:
         user_id = None
         try:
-            user_id = cookies["user_id"] # Use dictionary-style access
+            user_id = cookies["user_id"]
             if user_id:
                 print(f"Loaded user ID from cookie: {user_id}")
-            else: # Cookie exists but is empty
+            else:
                 print("User ID cookie was empty, generating a new one.")
                 user_id = str(uuid.uuid4())
                 cookies["user_id"] = user_id
-                cookies.save() # Explicitly save
+                cookies.save()
                 print(f"Generated new user ID and set cookie: {user_id}")
         except KeyError:
             print("User ID cookie not found, generating a new one.")
             user_id = str(uuid.uuid4())
-            cookies["user_id"] = user_id # Set using dictionary-style access
-            cookies.save() # Explicitly save
+            cookies["user_id"] = user_id
+            cookies.save()
             print(f"Generated new user ID and set cookie: {user_id}")
         except Exception as e:
             st.error(f"An unexpected error occurred with cookies: {e}. Please try clearing your browser cookies for this site.")
-            # Fallback to a temporary session-based ID if cookies fail catastrophically
             if 'user_id_temp' not in st.session_state:
                 st.session_state.user_id_temp = str(uuid.uuid4())
             user_id = st.session_state.user_id_temp
             print(f"Fell back to temporary user ID: {user_id}")
 
-        st.session_state.user_id = user_id # Standardized name
+        st.session_state.user_id = user_id
         
-        # After establishing user_id, load user's discussions
         _refresh_discussion_list()
-        # If no discussions, create a new one
-        if not st.session_state.discussion_list: # Standardized name
+        if not st.session_state.discussion_list:
             _create_new_discussion_session()
-        else: # Load the most recent one
-            _load_discussion_session(st.session_state.discussion_list[0]['id']) # Standardized name
-        st.rerun() # Rerun to apply user_info and load discussion
+        else:
+            _load_discussion_session(st.session_state.discussion_list[0]['id'])
+        st.rerun()
 
     # --- Main Chat Interface ---
     # Handle regeneration request if flag is set
@@ -381,22 +364,13 @@ def main():
         RAG_SOURCE_MARKER_PREFIX=RAG_SOURCE_MARKER_PREFIX
     )
 
-    # Removed the st.selectbox for suggested prompts
-    # st.selectbox(
-    #     "Select a suggested prompt:",
-    #     options=[""] + st.session_state.suggested_prompts,
-    #     key="selected_prompt_dropdown",
-    #     placeholder="Select a suggested prompt...",
-    #     on_change=set_selected_prompt_from_dropdown
-    # )
-
     # Render the chat input box at the bottom, capture its value
     chat_input_value = st.chat_input("Ask me about dissertations, research methods, academic writing, etc.")
 
     # Handle user input (either from chat box or a clicked suggested prompt button)
     handle_user_input(chat_input_value)
 
-    # Display a warning if Google API Key is missing (moved here)
+    # Display a warning if Google API Key is missing
     if not os.getenv("GOOGLE_API_KEY"):
         st.warning("⚠️ GOOGLE_API_KEY environment variable not set. The agent may not work properly.")
 
