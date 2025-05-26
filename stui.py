@@ -193,13 +193,10 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
 
     # --- Sidebar UI ---
     with st.sidebar:
-        st.header("User Account")
-        st.write(f"Logged in as: **Guest User**") # User ID is internal, not displayed as name
-        st.info("Your conversations are automatically saved and linked to your browser. Clearing browser data may remove your saved discussions.")
-        
-        st.divider()
         
         st.header("Discussions")
+        st.info("Your conversations are automatically saved and linked to your browser. Clearing browser data may remove your saved discussions.")
+
         # New Discussion button
         if st.button("➕ New Discussion", use_container_width=True, key="new_discussion_button"):
             st.session_state._create_new_discussion_session()
@@ -264,17 +261,6 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                         if st.button("🗑️ Delete", key=f"delete_from_popover_{discussion['id']}", use_container_width=True):
                             st.session_state._delete_current_discussion(discussion['id'])
                             # st.rerun() is called by _delete_current_discussion
-
-        st.markdown("---")
-        # Removed the global download button as it's now per-discussion in the popover
-        # st.subheader("Download Current Discussion")
-        # st.download_button(
-        #     label="Download as Markdown",
-        #     data=_get_chat_as_markdown(),
-        #     file_name=f"{st.session_state.current_discussion_title.replace(' ', '_')}.md",
-        #     mime="text/markdown",
-        #     key="download_markdown_button"
-        # )
 
         st.divider()
 

@@ -27,6 +27,7 @@ dependencies = [
     "pandas>=2.2.3",
     "pypdf>=5.4.0",
     "pyproject-toml>=0.1.0",
+    "scipy>=1.15.3",
     "streamlit>=1.45.0",
     "streamlit-cookies-manager>=0.2.0",
     "tavily-python>=0.7.0",
