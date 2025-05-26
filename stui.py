@@ -2,15 +2,14 @@ import streamlit as st
 import os
 import re
 import json
-from agent import generate_llm_greeting # Import generate_llm_greeting from agent.py
+# Removed: from agent import generate_llm_greeting # No longer needed here
 
 # Determine project root based on the script's location
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 
-def get_greeting_message() -> str:
-    """Generate a greeting message using the LLM."""
-    return generate_llm_greeting()
+# Removed: get_greeting_message() function as it's now called directly from app.py
+
 
 def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
     """Display the chat messages from the session state, handling file downloads and image display."""
@@ -223,7 +222,7 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
             st.rerun()
 
         # Dropdown to select existing discussions
-        discussion_options = {d["id"]: d["title"] for d in st.session_state.discussion_list}
+        discussion_options = {d["id"]: d["title"] for d in st.session_state.discussion_list} # Standardized name
         
         # Find the index of the current discussion in the options list
         current_discussion_index = 0
@@ -246,7 +245,7 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
         # Discussion Title Editor (moved to sidebar)
         st.text_input(
             "Edit Discussion Title",
-            value=st.session_state.current_discussion_title,
+            value=st.session_state.current_discussion_title, # Standardized name
             key="discussion_title_input",
             on_change=_update_discussion_title, # Auto-save on change
             help="Edit the title of the current discussion. Changes are saved automatically."
@@ -265,7 +264,7 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
         st.download_button(
             label="Download as Markdown",
             data=_get_chat_as_markdown(),
-            file_name=f"{st.session_state.current_discussion_title.replace(' ', '_')}.md",
+            file_name=f"{st.session_state.current_discussion_title.replace(' ', '_')}.md", # Standardized name
             mime="text/markdown",
             key="download_markdown_button"
         )

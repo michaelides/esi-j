@@ -57,20 +57,23 @@ def init_session_state_for_app():
     if "suggested_prompts" not in st.session_state:
         st.session_state.suggested_prompts = [] # Will be generated after initial greeting
 
-    if "user_info" not in st.session_state:
-        st.session_state.user_info = None # Stores logged-in user's info (now from cookie)
+    if "user_id" not in st.session_state: # Changed from user_info
+        st.session_state.user_id = None # Stores logged-in user's ID
 
     if "current_discussion_id" not in st.session_state:
         st.session_state.current_discussion_id = None # ID of the currently active discussion
 
-    if "discussion_title" not in st.session_state:
-        st.session_state.discussion_title = "New Discussion" # Title of the current discussion
+    if "current_discussion_title" not in st.session_state: # Standardized name
+        st.session_state.current_discussion_title = "New Discussion" # Title of the current discussion
 
-    if "all_discussions" not in st.session_state:
-        st.session_state.all_discussions = [] # List of all discussions for the logged-in user
+    if "discussion_list" not in st.session_state: # Standardized name
+        st.session_state.discussion_list = [] # List of all discussions for the logged-in user
 
     if "llm_temperature" not in st.session_state:
         st.session_state.llm_temperature = 0.7 # Default LLM temperature
+
+    if "next_research_idea_number" not in st.session_state:
+        st.session_state.next_research_idea_number = 1
 
 
 # --- Agent Initialization ---
@@ -137,8 +140,8 @@ def handle_user_input(chat_input_value: str | None):
     Process user input (either from chat box or suggested prompt)
     and update chat with AI response.
     """
-    # User info should always be present after main() runs
-    if not st.session_state.user_info:
+    # User ID should always be present after main() runs
+    if not st.session_state.user_id:
         st.error("User not identified. Please refresh the page.")
         return
 
@@ -172,41 +175,50 @@ def handle_user_input(chat_input_value: str | None):
 # --- Discussion Management Functions ---
 def _create_new_discussion_session():
     """Creates a new discussion and sets it as current."""
-    user_id = st.session_state.user_info['id']
-    new_discussion_meta = user_data_manager.create_new_discussion(user_id)
+    user_id = st.session_state.user_id
+    new_title = f"Research idea {st.session_state.next_research_idea_number}"
+    st.session_state.next_research_idea_number += 1
+
+    new_discussion_meta = user_data_manager.create_new_discussion(user_id, new_title)
     st.session_state.current_discussion_id = new_discussion_meta["id"]
-    st.session_state.discussion_title = new_discussion_meta["title"]
-    st.session_state.messages = [{"role": "assistant", "content": stui.get_greeting_message()}]
+    st.session_state.current_discussion_title = new_discussion_meta["title"] # Standardized name
+    
+    # Initialize messages with a greeting and generate suggested prompts
+    st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}] # Direct call to agent.py
     st.session_state.suggested_prompts = generate_suggested_prompts(st.session_state.messages)
+
     _refresh_discussion_list()
-    print(f"New discussion created and set as current: {st.session_state.discussion_title} ({st.session_state.current_discussion_id})")
+    print(f"New discussion created and set as current: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
     st.rerun()
 
 def _load_discussion_session(discussion_id: str):
     """Loads an existing discussion and sets it as current."""
-    user_id = st.session_state.user_info['id']
+    user_id = st.session_state.user_id
     discussion_data = user_data_manager.load_discussion(user_id, discussion_id)
     if discussion_data:
         st.session_state.current_discussion_id = discussion_data["id"]
-        st.session_state.discussion_title = discussion_data.get("title", "Untitled Discussion")
+        st.session_state.current_discussion_title = discussion_data.get("title", "Untitled Discussion") # Standardized name
         st.session_state.messages = discussion_data.get("messages", [])
+        
         if not st.session_state.messages: # If loaded discussion is empty, add greeting
-             st.session_state.messages = [{"role": "assistant", "content": stui.get_greeting_message()}]
+             st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}] # Direct call to agent.py
+        
         st.session_state.suggested_prompts = generate_suggested_prompts(st.session_state.messages)
-        print(f"Loaded discussion: {st.session_state.discussion_title} ({st.session_state.current_discussion_id})")
+        print(f"Loaded discussion: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
     else:
         st.error("Failed to load discussion.")
         print(f"Failed to load discussion with ID: {discussion_id}")
+        _create_new_discussion_session() # Fallback to new discussion if load fails
     st.rerun()
 
 def _save_current_discussion():
     """Saves the current discussion to persistent storage."""
-    if st.session_state.user_info and st.session_state.current_discussion_id:
-        user_id = st.session_state.user_info['id']
+    if st.session_state.user_id and st.session_state.current_discussion_id:
+        user_id = st.session_state.user_id
         user_data_manager.save_discussion(
             user_id,
             st.session_state.current_discussion_id,
-            st.session_state.discussion_title,
+            st.session_state.current_discussion_title, # Standardized name
             st.session_state.messages
         )
         _refresh_discussion_list() # Refresh list to update 'updated_at' or title if changed
@@ -215,12 +227,12 @@ def _save_current_discussion():
 
 def _delete_current_discussion():
     """Deletes the currently active discussion."""
-    if st.session_state.user_info and st.session_state.current_discussion_id:
-        user_id = st.session_state.user_info['id']
+    if st.session_state.user_id and st.session_state.current_discussion_id:
+        user_id = st.session_state.user_id
         if user_data_manager.delete_discussion(user_id, st.session_state.current_discussion_id):
-            st.success(f"Discussion '{st.session_state.discussion_title}' deleted.")
+            st.success(f"Discussion '{st.session_state.current_discussion_title}' deleted.") # Standardized name
             st.session_state.current_discussion_id = None
-            st.session_state.discussion_title = "New Discussion"
+            st.session_state.current_discussion_title = "New Discussion" # Standardized name
             st.session_state.messages = [] # Clear messages
             _refresh_discussion_list()
             st.rerun()
@@ -231,10 +243,10 @@ def _delete_current_discussion():
 
 def _refresh_discussion_list():
     """Refreshes the list of discussions for the current user."""
-    if st.session_state.user_info:
-        st.session_state.all_discussions = user_data_manager.list_discussions(st.session_state.user_info['id'])
+    if st.session_state.user_id:
+        st.session_state.discussion_list = user_data_manager.list_discussions(st.session_state.user_id) # Standardized name
     else:
-        st.session_state.all_discussions = []
+        st.session_state.discussion_list = []
 
 # Expose these functions to st.session_state so stui.py can call them
 st.session_state._create_new_discussion_session = _create_new_discussion_session
@@ -273,7 +285,7 @@ def handle_regeneration_request():
     # Case 1: Regenerating the initial greeting
     if len(st.session_state.messages) == 1:
         print("Regenerating initial greeting...")
-        new_greeting = generate_llm_greeting()
+        new_greeting = generate_llm_greeting() # Direct call to agent.py
         st.session_state.messages[0]['content'] = new_greeting
         _save_current_discussion() # Save the regenerated greeting
         st.rerun()
@@ -316,7 +328,7 @@ def main():
     initialize_agent()
 
     # --- User Identification (Cookie-based) ---
-    if "user_info" not in st.session_state or st.session_state.user_info is None:
+    if "user_id" not in st.session_state or st.session_state.user_id is None: # Changed from user_info
         user_id = None
         try:
             user_id = cookies["user_id"] # Use dictionary-style access
@@ -342,22 +354,21 @@ def main():
             user_id = st.session_state.user_id_temp
             print(f"Fell back to temporary user ID: {user_id}")
 
-        st.session_state.user_info = {"id": user_id, "name": "Guest User"}
+        st.session_state.user_id = user_id # Standardized name
         
-        # After establishing user_info, load user's discussions
+        # After establishing user_id, load user's discussions
         _refresh_discussion_list()
         # If no discussions, create a new one
-        if not st.session_state.all_discussions:
+        if not st.session_state.discussion_list: # Standardized name
             _create_new_discussion_session()
         else: # Load the most recent one
-            _load_discussion_session(st.session_state.all_discussions[0]['id'])
+            _load_discussion_session(st.session_state.discussion_list[0]['id']) # Standardized name
         st.rerun() # Rerun to apply user_info and load discussion
 
     # --- Sidebar UI ---
     with st.sidebar:
         st.header("User Account")
-        user_name = st.session_state.user_info.get('name', 'User')
-        st.write(f"Logged in as: **{user_name}**")
+        st.write(f"Logged in as: **Guest User**") # User ID is internal, not displayed as name
         st.info("Your conversations are automatically saved and linked to your browser. Clearing browser data may remove your saved discussions.")
         
         # No explicit logout button needed for cookie-based system, as it's persistent.
@@ -369,7 +380,10 @@ def main():
         handle_regeneration_request()
 
     # Create the rest of the interface using stui (displays chat history, sidebar, etc.)
-    stui.create_interface()
+    stui.create_interface(
+        DOWNLOAD_MARKER=DOWNLOAD_MARKER,
+        RAG_SOURCE_MARKER_PREFIX=RAG_SOURCE_MARKER_PREFIX
+    )
 
     # Display suggested prompts as a dropdown below the chat history
     st.selectbox(
