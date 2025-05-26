@@ -354,10 +354,10 @@ def main():
     # Handle user input (either from chat box or a clicked suggested prompt button)
     handle_user_input(chat_input_value)
 
-
-if __name__ == "__main__":
-    # Display a warning if Google API Key is missing
+    # Display a warning if Google API Key is missing (moved here)
     if not os.getenv("GOOGLE_API_KEY"):
         st.warning("⚠️ GOOGLE_API_KEY environment variable not set. The agent may not work properly.")
 
+
+if __name__ == "__main__":
     main()
