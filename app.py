@@ -27,9 +27,20 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Now import CookieManager after set_page_config
-from streamlit_cookies_manager import CookieManager # For cookie-based persistence
+# Now import EncryptedCookieManager after set_page_config
+from streamlit_cookies_manager import EncryptedCookieManager # For cookie-based persistence
+import os # For environment variables for cookie password
 
+# --- Initialize Cookie Manager (should be on top) ---
+cookies = EncryptedCookieManager(
+    prefix="esi_app_user/", # Example prefix
+    # You should really setup a long COOKIES_PASSWORD secret if you're running on Streamlit Cloud.
+    password=os.environ.get("COOKIES_PASSWORD", "a_secure_default_password_for_esi_app"),
+)
+
+if not cookies.ready():
+    # Wait for the component to load and send us current cookies.
+    st.stop()
 
 # --- Constants and Configuration ---
 AGENT_SESSION_KEY = "esi_unified_agent" # Key for storing unified agent
@@ -306,15 +317,31 @@ def main():
 
     # --- User Identification (Cookie-based) ---
     if "user_info" not in st.session_state or st.session_state.user_info is None:
-        cookies = CookieManager() # Instantiate the cookie manager
-        user_id = cookies.get("user_id")
-        if user_id is None:
+        user_id = None
+        try:
+            user_id = cookies["user_id"] # Use dictionary-style access
+            if user_id:
+                print(f"Loaded user ID from cookie: {user_id}")
+            else: # Cookie exists but is empty
+                print("User ID cookie was empty, generating a new one.")
+                user_id = str(uuid.uuid4())
+                cookies["user_id"] = user_id
+                cookies.save() # Explicitly save
+                print(f"Generated new user ID and set cookie: {user_id}")
+        except KeyError:
+            print("User ID cookie not found, generating a new one.")
             user_id = str(uuid.uuid4())
-            cookies.set("user_id", user_id, max_age=31536000) # <-- This line needs modification
+            cookies["user_id"] = user_id # Set using dictionary-style access
+            cookies.save() # Explicitly save
             print(f"Generated new user ID and set cookie: {user_id}")
-        else:
-            print(f"Loaded user ID from cookie: {user_id}")
-        
+        except Exception as e:
+            st.error(f"An unexpected error occurred with cookies: {e}. Please try clearing your browser cookies for this site.")
+            # Fallback to a temporary session-based ID if cookies fail catastrophically
+            if 'user_id_temp' not in st.session_state:
+                st.session_state.user_id_temp = str(uuid.uuid4())
+            user_id = st.session_state.user_id_temp
+            print(f"Fell back to temporary user ID: {user_id}")
+
         st.session_state.user_info = {"id": user_id, "name": "Guest User"}
         
         # After establishing user_info, load user's discussions
