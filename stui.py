@@ -43,7 +43,7 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                     try:
                         rag_data = json.loads(json_str)
                         extracted_rag_sources.append(rag_data)
-                        print(f"Extracted RAG source: {rag_data.get('name') or rag_data.get('title')}")
+                        # print(f"Extracted RAG source: {rag_data.get('name') or rag_data.get('title')}") # Removed verbose print
                     except json.JSONDecodeError as e:
                         print(f"Warning: Could not decode RAG source JSON: '{json_str}'. Error: {e}")
                     
@@ -60,18 +60,18 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                     # Remove the marker from text_to_display
                     text_to_display = text_to_display[:code_marker_match.start()] + text_to_display[code_marker_match.end():]
                     
-                    print(f"Found code download marker. Filename: {extracted_filename}")
+                    # print(f"Found code download marker. Filename: {extracted_filename}") # Removed verbose print
                     code_download_filename = extracted_filename
                     code_download_filepath_relative = os.path.join(CODE_WORKSPACE_RELATIVE, extracted_filename)
 
                     code_download_filepath_absolute = os.path.join(PROJECT_ROOT, code_download_filepath_relative)
 
                     if extracted_filename and os.path.exists(code_download_filepath_absolute):
-                        print(f"Code download file exists at: {code_download_filepath_absolute}")
+                        # print(f"Code download file exists at: {code_download_filepath_absolute}") # Removed verbose print
                         image_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff']
                         if os.path.splitext(code_download_filename)[1].lower() in image_extensions:
                             code_is_image = True
-                            print(f"Detected image file from code interpreter: {code_download_filename}")
+                            # print(f"Detected image file from code interpreter: {code_download_filename}") # Removed verbose print
                     else:
                         print(f"Code download file '{extracted_filename}' NOT found at '{code_download_filepath_absolute}'.")
                         text_to_display += f"\n\n*(Warning: The file '{extracted_filename}' mentioned for download could not be found.)*"
@@ -115,7 +115,7 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                                         mime="application/pdf",
                                         key=f"rag_pdf_{msg_idx}_{rag_idx}_{pdf_name}"
                                     )
-                                print(f"Added download button for RAG PDF: {button_label} (Path: {pdf_absolute_path})")
+                                # print(f"Added download button for RAG PDF: {button_label} (Path: {pdf_absolute_path})") # Removed verbose print
                                 display_item = True
                             except Exception as e:
                                 st.error(f"Error creating download button for {pdf_name}: {e}")
@@ -131,7 +131,7 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                     if identifier and identifier not in displayed_rag_identifiers:
                         if url:
                             st.markdown(f"Source: [{title}]({url})")
-                            print(f"Added link for RAG web source: {title} (URL: {url})")
+                            # print(f"Added link for RAG web source: {title} (URL: {url})") # Removed verbose print
                             display_item = True
                 
                 if display_item and identifier:
@@ -147,7 +147,7 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
             if code_is_image and code_download_absolute_filepath and os.path.exists(code_download_absolute_filepath):
                 try:
                     st.image(code_download_absolute_filepath, caption=code_download_filename, use_container_width=True)
-                    print(f"Successfully displayed image from code interpreter: {code_download_filename}")
+                    # print(f"Successfully displayed image from code interpreter: {code_download_filename}") # Removed verbose print
                 except Exception as e:
                     st.error(f"Error displaying image {code_download_filename}: {e}")
             
@@ -161,7 +161,7 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                             mime="application/octet-stream",
                             key=f"code_dl_{msg_idx}_{code_download_filename}"
                         )
-                    print(f"Successfully added download button for code interpreter file: {code_download_filename}")
+                    # print(f"Successfully added download button for code interpreter file: {code_download_filename}") # Removed verbose print
                 except Exception as e:
                     st.error(f"Error creating download button for {code_download_filename}: {e}")
 

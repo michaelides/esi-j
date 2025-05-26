@@ -34,7 +34,7 @@ def create_new_discussion(user_id: str, title: str = "New Discussion") -> Dict[s
     }
     # Save immediately to create the file
     save_discussion(user_id, discussion_id, title, [])
-    print(f"Created new discussion for user {user_id}: {title} ({discussion_id})")
+    # print(f"Created new discussion for user {user_id}: {title} ({discussion_id})") # Removed verbose print
     return new_discussion
 
 def save_discussion(user_id: str, discussion_id: str, title: str, messages: List[Dict[str, Any]]):
@@ -65,7 +65,7 @@ def save_discussion(user_id: str, discussion_id: str, title: str, messages: List
     try:
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(discussion_data, f, indent=4)
-        print(f"Saved discussion {discussion_id} for user {user_id} to {filepath}")
+        # print(f"Saved discussion {discussion_id} for user {user_id} to {filepath}") # Removed verbose print
     except IOError as e:
         print(f"Error saving discussion {discussion_id} for user {user_id}: {e}")
         raise
@@ -80,7 +80,7 @@ def load_discussion(user_id: str, discussion_id: str) -> Optional[Dict[str, Any]
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 discussion_data = json.load(f)
-                print(f"Loaded discussion {discussion_id} for user {user_id} from {filepath}")
+                # print(f"Loaded discussion {discussion_id} for user {user_id} from {filepath}") # Removed verbose print
                 return discussion_data
         except json.JSONDecodeError as e:
             print(f"Error decoding JSON for discussion {discussion_id} ({filepath}): {e}")
@@ -88,7 +88,7 @@ def load_discussion(user_id: str, discussion_id: str) -> Optional[Dict[str, Any]
         except IOError as e:
             print(f"Error loading discussion {discussion_id} ({filepath}): {e}")
             return None
-    print(f"Discussion {discussion_id} not found for user {user_id}.")
+    # print(f"Discussion {discussion_id} not found for user {user_id}.") # Removed verbose print
     return None
 
 def list_discussions(user_id: str) -> List[Dict[str, Any]]:
@@ -117,7 +117,7 @@ def list_discussions(user_id: str) -> List[Dict[str, Any]]:
                     print(f"Warning: Could not read file {filepath} when listing: {e}")
     # Sort by updated_at, most recent first
     discussions.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
-    print(f"Listed {len(discussions)} discussions for user {user_id}.")
+    # print(f"Listed {len(discussions)} discussions for user {user_id}.") # Removed verbose print
     return discussions
 
 def delete_discussion(user_id: str, discussion_id: str) -> bool:
@@ -129,12 +129,12 @@ def delete_discussion(user_id: str, discussion_id: str) -> bool:
     if os.path.exists(filepath):
         try:
             os.remove(filepath)
-            print(f"Deleted discussion {discussion_id} for user {user_id}.")
+            # print(f"Deleted discussion {discussion_id} for user {user_id}.") # Removed verbose print
             return True
         except OSError as e:
             print(f"Error deleting discussion {discussion_id} ({filepath}): {e}")
             return False
-    print(f"Attempted to delete discussion {discussion_id} but file not found.")
+    # print(f"Attempted to delete discussion {discussion_id} but file not found.") # Removed verbose print
     return False
 
 def delete_all_user_data(user_id: str) -> bool:
@@ -146,12 +146,12 @@ def delete_all_user_data(user_id: str) -> bool:
     if os.path.exists(user_dir):
         try:
             shutil.rmtree(user_dir)
-            print(f"Deleted all data for user {user_id}.")
+            # print(f"Deleted all data for user {user_id}.") # Removed verbose print
             return True
         except OSError as e:
             print(f"Error deleting user directory {user_dir}: {e}")
             return False
-    print(f"Attempted to delete user data for {user_id} but directory not found.")
+    # print(f"Attempted to delete user data for {user_id} but directory not found.") # Removed verbose print
     return False
 
 if __name__ == '__main__':
