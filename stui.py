@@ -226,9 +226,7 @@ def create_interface():
             help="Controls the randomness of the AI's responses. Lower values are more focused, higher values are more creative."
         )
 
-        st.divider()
-        st.info("Made for NBS7091A and NBS7095x")
-        
+
         st.divider()
         # Discussions section moved here
         st.header("Discussions")
@@ -281,7 +279,10 @@ def create_interface():
         st.divider()
         if st.button("🔄 Reset Current Chat", key="reset_chat_button", help="Clears the current conversation and starts a new one, saving the old one."):
             st.session_state.reset_chat_callback() # Call app.py's function
-
+        st.divider()
+        st.info("Made for NBS7091A and NBS7095x")
+        
+    
     # Display chat messages
     display_chat()
 
