@@ -78,6 +78,9 @@ def init_session_state_for_app():
     if "do_regenerate" not in st.session_state:
         st.session_state.do_regenerate = False
 
+    if "should_generate_prompts" not in st.session_state: # New flag for controlled prompt generation
+        st.session_state.should_generate_prompts = False
+
 
 # --- Helper Function for History Formatting ---
 def format_chat_history(streamlit_messages: list[dict[str, Any]]) -> list[ChatMessage]:
@@ -159,7 +162,7 @@ def handle_user_input(chat_input_value: str | None):
 
         # Save the updated discussion after each turn
         _save_current_discussion()
-        st.session_state.suggested_prompts = generate_suggested_prompts(st.session_state.messages)
+        st.session_state.should_generate_prompts = True # Set flag to generate new prompts
         st.rerun()
 
 # --- Discussion Management Functions ---
@@ -173,9 +176,9 @@ def _create_new_discussion_session():
     st.session_state.current_discussion_id = new_discussion_meta["id"]
     st.session_state.current_discussion_title = new_discussion_meta["title"] # Standardized name
     
-    # Initialize messages with a greeting and generate suggested prompts
+    # Initialize messages with a greeting
     st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}] # Direct call to agent.py
-    st.session_state.suggested_prompts = generate_suggested_prompts(st.session_state.messages)
+    st.session_state.should_generate_prompts = True # Set flag to generate new prompts
 
     _refresh_discussion_list()
     print(f"New discussion created and set as current: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
@@ -193,7 +196,7 @@ def _load_discussion_session(discussion_id: str):
         if not st.session_state.messages: # If loaded discussion is empty, add greeting
              st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}] # Direct call to agent.py
         
-        st.session_state.suggested_prompts = generate_suggested_prompts(st.session_state.messages)
+        st.session_state.should_generate_prompts = True # Set flag to generate new prompts
         print(f"Loaded discussion: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
     else:
         st.error("Failed to load discussion.")
@@ -276,6 +279,7 @@ def handle_regeneration_request():
         new_greeting = generate_llm_greeting() # Direct call to agent.py
         st.session_state.messages[0]['content'] = new_greeting
         _save_current_discussion() # Save the regenerated greeting
+        st.session_state.should_generate_prompts = True # Set flag to generate new prompts
         st.rerun()
         return
 
@@ -294,7 +298,7 @@ def handle_regeneration_request():
     response_text = get_agent_response(prompt_to_regenerate, chat_history=formatted_history_for_regen)
     st.session_state.messages.append({"role": "assistant", "content": response_text})
     _save_current_discussion() # Save the regenerated response
-    st.session_state.suggested_prompts = generate_suggested_prompts(st.session_state.messages)
+    st.session_state.should_generate_prompts = True # Set flag to generate new prompts
     st.rerun()
 
 
@@ -358,6 +362,11 @@ def main():
     # Handle regeneration request if flag is set
     if st.session_state.get("do_regenerate", False):
         handle_regeneration_request()
+
+    # Generate suggested prompts only if the flag is set
+    if st.session_state.should_generate_prompts:
+        st.session_state.suggested_prompts = generate_suggested_prompts(st.session_state.messages)
+        st.session_state.should_generate_prompts = False # Reset the flag
 
     # Create the rest of the interface using stui (displays chat history, sidebar, etc.)
     stui.create_interface(
