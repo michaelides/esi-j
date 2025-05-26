@@ -1,17 +1,1 @@
-streamlit
-llama-index-core
-llama-index-llms-gemini
-llama-index-embeddings-google-genai
-llama-index-readers-web
-llama-index-readers-semanticscholar
-llama-index-tools-wikipedia
-llama-index-tools-tavily-research
-llama-index-tools-duckduckgo
-llama-index-tools-code-interpreter
-python-dotenv
-huggingface_hub
-crawl4ai
-streamlit-oauth
-requests
-# fpdf # Uncomment if you want PDF download
-# python-docx # Uncomment if you want DOCX download
+pip install -r requirements.txt
