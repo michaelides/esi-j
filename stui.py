@@ -2,27 +2,18 @@ import streamlit as st
 import os
 import re
 import json
-from agent import generate_llm_greeting, DEFAULT_PROMPTS
-# user_data_manager is not directly imported here anymore,
-# as its functions are called via st.session_state in app.py
+from agent import generate_llm_greeting # Import generate_llm_greeting from agent.py
 
 # Determine project root based on the script's location
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 
 def get_greeting_message() -> str:
-    """Generate a greeting message, trying the LLM first and falling back to static."""
+    """Generate a greeting message using the LLM."""
     return generate_llm_greeting()
 
-# init_session_state is no longer needed here as app.py handles it
-# def init_session_state():
-#     """Initialize session state variables for a new chat."""
-#     pass
-
-def display_chat():
+def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
     """Display the chat messages from the session state, handling file downloads and image display."""
-    CODE_DOWNLOAD_MARKER = "---DOWNLOAD_FILE---"  # For files from code interpreter
-    RAG_SOURCE_MARKER = "---RAG_SOURCE---"      # For files/links from RAG
     
     # Workspace for code interpreter files, defined relative to PROJECT_ROOT
     CODE_WORKSPACE_RELATIVE = "./code_interpreter_ws"
@@ -33,7 +24,7 @@ def display_chat():
         with st.chat_message(message["role"]):
             content = message["content"]
             
-            # --- Initialize variables for extracted data ---
+            # Initialize text_to_display with the full content of the message
             text_to_display = content
             rag_sources_data = []
             code_download_filename = None
@@ -42,12 +33,12 @@ def display_chat():
 
             if message["role"] == "assistant":
                 # --- 1. Extract RAG sources ---
-                rag_source_pattern = re.compile(rf"{re.escape(RAG_SOURCE_MARKER)}\s*({{.*?}})\s*(?:\n|$)", re.DOTALL)
+                rag_source_pattern = re.compile(rf"{re.escape(RAG_SOURCE_MARKER_PREFIX)}\s*({{.*?}})\s*(?:\n|$)", re.DOTALL)
                 
-                matches = list(rag_source_pattern.finditer(content))
+                matches = list(rag_source_pattern.finditer(text_to_display)) # Search in current text_to_display
 
-                text_without_rag_markers = content
                 extracted_rag_sources = []
+                # Iterate in reverse to avoid issues with index shifts when removing parts
                 for match in reversed(matches):
                     json_str = match.group(1)
                     try:
@@ -57,16 +48,18 @@ def display_chat():
                     except json.JSONDecodeError as e:
                         print(f"Warning: Could not decode RAG source JSON: '{json_str}'. Error: {e}")
                     
-                    text_without_rag_markers = text_without_rag_markers[:match.start()] + text_without_rag_markers[match.end():]
+                    # Remove the marker and its content from text_to_display
+                    text_to_display = text_to_display[:match.start()] + text_to_display[match.end():]
                 
                 rag_sources_data = list(reversed(extracted_rag_sources))
-                text_to_display = text_without_rag_markers.strip()
-
+                
                 # --- 2. Extract Code Interpreter download marker ---
-                code_marker_match = re.search(rf"^{re.escape(CODE_DOWNLOAD_MARKER)}(.*)$", text_to_display, re.MULTILINE | re.IGNORECASE)
+                # Search in the potentially modified text_to_display
+                code_marker_match = re.search(rf"^{re.escape(DOWNLOAD_MARKER)}(.*)$", text_to_display, re.MULTILINE | re.IGNORECASE)
                 if code_marker_match:
                     extracted_filename = code_marker_match.group(1).strip()
-                    text_to_display = text_to_display[:code_marker_match.start()].strip() + text_to_display[code_marker_match.end():].strip()
+                    # Remove the marker from text_to_display
+                    text_to_display = text_to_display[:code_marker_match.start()] + text_to_display[code_marker_match.end():]
                     
                     print(f"Found code download marker. Filename: {extracted_filename}")
                     code_download_filename = extracted_filename
@@ -83,6 +76,9 @@ def display_chat():
                     else:
                         print(f"Code download file '{extracted_filename}' NOT found at '{code_download_filepath_absolute}'.")
                         text_to_display += f"\n\n*(Warning: The file '{extracted_filename}' mentioned for download could not be found.)*"
+
+            # Apply strip to the final text to display, after all extractions
+            text_to_display = text_to_display.strip()
 
             # --- 3. Display main text content ---
             if text_to_display:
@@ -180,41 +176,105 @@ def display_chat():
                 
                 if can_regenerate:
                     if st.button("🔄", key=f"regenerate_{msg_idx}", help="Regenerate Response"):
-                        st.session_state.do_regenerate = True
+                        st.session_state.handle_regeneration_request()
                         st.rerun()
 
 def _on_discussion_selection_change():
     """Callback for the discussion selection dropdown."""
-    selected_discussion = st.session_state.selected_discussion_dropdown
-    if selected_discussion and selected_discussion["id"] is not None:
-        # An existing discussion was selected
-        st.session_state._load_discussion_session(selected_discussion["id"])
-    elif selected_discussion and selected_discussion["id"] is None:
-        # "➕ New Discussion" was selected
-        st.session_state._create_new_discussion_session()
+    selected_discussion_id = st.session_state.selected_discussion_id
+    if selected_discussion_id: # If an existing discussion was selected
+        st.session_state._load_discussion_session(selected_discussion_id)
+    # If "➕ New Discussion" was selected, the "New Discussion" button handles it.
 
 
-def create_interface():
+def _update_discussion_title():
+    """Callback to update the discussion title when the text input changes."""
+    new_title = st.session_state.discussion_title_input
+    if new_title != st.session_state.current_discussion_title:
+        st.session_state.current_discussion_title = new_title
+        st.session_state._save_current_discussion() # Save to update title in file
+        st.session_state._refresh_discussion_list() # Refresh list to show new title in dropdown
+        print(f"Discussion title updated to: {new_title}")
+
+def _get_chat_as_markdown() -> str:
+    """Converts the current chat history to a Markdown string."""
+    markdown_content = f"# Discussion: {st.session_state.current_discussion_title}\n\n"
+    for message in st.session_state.messages:
+        role = message["role"].capitalize()
+        content = message["content"]
+        markdown_content += f"## {role}\n{content}\n\n"
+    return markdown_content
+
+def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
     """Create the Streamlit UI for the chat interface."""
-    st.title("🎓 ESI: ESI Scholarly Instructor")
-    st.caption("Your AI partner for brainstorming and structuring your dissertation research")
 
-    # Display current discussion title
-    if st.session_state.get("current_discussion_id"):
-        st.text_input("Discussion Title", value=st.session_state.discussion_title, key="discussion_title_input", on_change=_update_discussion_title)
-    
-    # Create sidebar
+    # --- Sidebar UI ---
     with st.sidebar:
-        # User Account section is removed from here, now handled in app.py main()
-        # and only shows a generic message about cookie persistence.
+        st.header("User Account")
+        st.write(f"Logged in as: **Guest User**") # User ID is internal, not displayed as name
+        st.info("Your conversations are automatically saved and linked to your browser. Clearing browser data may remove your saved discussions.")
+        
+        st.divider()
+        
+        st.header("Discussions")
+        # New Discussion button
+        if st.button("➕ New Discussion", use_container_width=True, key="new_discussion_button"):
+            st.session_state._create_new_discussion_session()
+            st.rerun()
 
-        st.header("About ESI")
-        st.info("ESI uses AI to help you navigate the dissertation process. It has access to some of the literature in your reading lists and also uses search tools for web lookups.")
-        st.warning("⚠️  Remember: Always consult your dissertation supervisor for final guidance and decisions.")
+        # Dropdown to select existing discussions
+        discussion_options = {d["id"]: d["title"] for d in st.session_state.discussion_list}
+        
+        # Find the index of the current discussion in the options list
+        current_discussion_index = 0
+        if st.session_state.current_discussion_id:
+            for i, disc_id in enumerate(discussion_options.keys()):
+                if disc_id == st.session_state.current_discussion_id:
+                    current_discussion_index = i
+                    break
+
+        st.selectbox(
+            "Select or create a discussion:",
+            options=list(discussion_options.keys()),
+            format_func=lambda x: discussion_options[x],
+            key="selected_discussion_id",
+            index=current_discussion_index,
+            on_change=_on_discussion_selection_change,
+            help="Choose an existing discussion to load."
+        )
+
+        # Discussion Title Editor (moved to sidebar)
+        st.text_input(
+            "Edit Discussion Title",
+            value=st.session_state.current_discussion_title,
+            key="discussion_title_input",
+            on_change=_update_discussion_title, # Auto-save on change
+            help="Edit the title of the current discussion. Changes are saved automatically."
+        )
+
+        # Delete Discussion button
+        if st.button("🗑️ Delete Current Discussion", use_container_width=True, key="delete_discussion_button"):
+            if st.session_state.current_discussion_id:
+                st.session_state._delete_current_discussion()
+            else:
+                st.warning("No discussion selected to delete.")
+            st.rerun() # Rerun after deletion to update UI
+
+        st.markdown("---")
+        st.subheader("Download Current Discussion")
+        st.download_button(
+            label="Download as Markdown",
+            data=_get_chat_as_markdown(),
+            file_name=f"{st.session_state.current_discussion_title.replace(' ', '_')}.md",
+            mime="text/markdown",
+            key="download_markdown_button"
+        )
+        # Placeholder for other download options
+        # st.button("Download as PDF (Coming Soon)", disabled=True)
+        # st.button("Download as DOCX (Coming Soon)", disabled=True)
 
         st.divider()
 
-        # Add Temperature Slider
         st.header("LLM Settings")
         st.slider(
             "Creativity (Temperature)",
@@ -226,80 +286,25 @@ def create_interface():
             help="Controls the randomness of the AI's responses. Lower values are more focused, higher values are more creative."
         )
 
-
         st.divider()
-        # Discussions section moved here
-        st.header("Discussions")
-        if st.session_state.user_info: # This check should always be true now
-            # Dropdown to select existing discussions
-            discussion_options = [{"id": None, "title": "➕ New Discussion"}] + st.session_state.all_discussions
-            
-            # Find the index of the current discussion in the options list
-            current_discussion_index = 0
-            if st.session_state.current_discussion_id:
-                for i, disc in enumerate(discussion_options):
-                    if disc["id"] == st.session_state.current_discussion_id:
-                        current_discussion_index = i
-                        break
-
-            st.selectbox(
-                "Select or create a discussion:",
-                options=discussion_options,
-                format_func=lambda x: x["title"],
-                key="selected_discussion_dropdown",
-                index=current_discussion_index,
-                on_change=_on_discussion_selection_change # Call the new function in stui.py
-            )
-
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("💾 Save Current", key="save_discussion_button", help="Save the current discussion."):
-                    st.session_state._save_current_discussion() # Call app.py's function
-                    st.success("Discussion saved!")
-            with col2:
-                if st.button("🗑️ Delete Current", key="delete_discussion_button", help="Delete the current discussion. This cannot be undone."):
-                    if st.session_state.current_discussion_id:
-                        st.session_state._delete_current_discussion() # Call app.py's function
-                    else:
-                        st.warning("No discussion selected to delete.")
-            
-            st.markdown("---")
-            st.subheader("Download Current Discussion")
-            st.download_button(
-                label="Download as Markdown",
-                data=_get_chat_as_markdown(),
-                file_name=f"{st.session_state.discussion_title.replace(' ', '_')}.md",
-                mime="text/markdown",
-                key="download_markdown_button"
-            )
-            # Placeholder for other download options
-            # st.button("Download as PDF (Coming Soon)", disabled=True)
-            # st.button("Download as DOCX (Coming Soon)", disabled=True)
-
-        st.divider()
-        if st.button("🔄 Reset Current Chat", key="reset_chat_button", help="Clears the current conversation and starts a new one, saving the old one."):
-            st.session_state.reset_chat_callback() # Call app.py's function
-        st.divider()
+        st.header("About ESI")
+        st.info("ESI uses AI to help you navigate the dissertation process. It has access to some of the literature in your reading lists and also uses search tools for web lookups.")
+        st.warning("⚠️  Remember: Always consult your dissertation supervisor for final guidance and decisions.")
         st.info("Made for NBS7091A and NBS7095x")
         
-    
+    # --- Main Chat Interface ---
+    st.title("🎓 ESI: ESI Scholarly Instructor")
+    st.caption("Your AI partner for brainstorming and structuring your dissertation research")
+
     # Display chat messages
-    display_chat()
+    display_chat(DOWNLOAD_MARKER, RAG_SOURCE_MARKER_PREFIX)
 
-def _update_discussion_title():
-    """Callback to update the discussion title when the text input changes."""
-    new_title = st.session_state.discussion_title_input
-    if new_title != st.session_state.discussion_title:
-        st.session_state.discussion_title = new_title
-        st.session_state._save_current_discussion() # Save to update title in file
-        st.session_state._refresh_discussion_list() # Refresh list to show new title in dropdown
-        print(f"Discussion title updated to: {new_title}")
-
-def _get_chat_as_markdown() -> str:
-    """Converts the current chat history to a Markdown string."""
-    markdown_content = f"# Discussion: {st.session_state.discussion_title}\n\n"
-    for message in st.session_state.messages:
-        role = message["role"].capitalize()
-        content = message["content"]
-        markdown_content += f"## {role}\n{content}\n\n"
-    return markdown_content
+    # Display suggested prompts as buttons below the chat history
+    if st.session_state.suggested_prompts:
+        st.markdown("---")
+        st.subheader("Suggested Prompts:")
+        cols = st.columns(len(st.session_state.suggested_prompts))
+        for i, prompt in enumerate(st.session_state.suggested_prompts):
+            if cols[i].button(prompt, key=f"suggested_prompt_{i}"):
+                st.session_state.prompt_to_use = prompt
+                st.rerun() # Trigger rerun to process the prompt
