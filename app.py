@@ -8,7 +8,7 @@ from llama_index.core.llms import ChatMessage, MessageRole
 import stui
 from agent import create_unified_agent, generate_suggested_prompts, initialize_settings as initialize_agent_settings, generate_llm_greeting
 from dotenv import load_dotenv
-import st_cookie # For cookie-based persistence
+from st_cookie import cookie_manager # For cookie-based persistence
 import user_data_manager # New import for user data persistence
 
 # Determine project root based on the script's location
@@ -301,10 +301,11 @@ def main():
 
     # --- User Identification (Cookie-based) ---
     if "user_info" not in st.session_state or st.session_state.user_info is None:
-        user_id = st_cookie.get_cookie("user_id")
+        cookies = cookie_manager() # Instantiate the cookie manager
+        user_id = cookies.get("user_id")
         if user_id is None:
             user_id = str(uuid.uuid4())
-            st_cookie.set_cookie("user_id", user_id)
+            cookies.set("user_id", user_id)
             print(f"Generated new user ID and set cookie: {user_id}")
         else:
             print(f"Loaded user ID from cookie: {user_id}")
