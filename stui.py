@@ -233,10 +233,11 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                 st.session_state.editing_discussion_title = False
                 st.rerun()
         else:
-            st.markdown(f"### Current: {st.session_state.current_discussion_title}")
-            if st.button("✏️ Edit Title", key="edit_title_button", use_container_width=True):
+            # Make the title itself a clickable button to initiate editing
+            if st.button(f"### {st.session_state.current_discussion_title}", key="title_as_button", use_container_width=True):
                 st.session_state.editing_discussion_title = True
                 st.rerun()
+            # Removed the separate "✏️ Edit Title" button
 
         st.subheader("Your Discussions")
         if not st.session_state.discussion_list:
