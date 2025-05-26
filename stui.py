@@ -73,7 +73,7 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                             code_is_image = True
                             print(f"Detected image file from code interpreter: {code_download_filename}")
                     else:
-                        print(f"Code download file '{extracted_filename}' NOT found at '{code_download_absolute_filepath}'.")
+                        print(f"Code download file '{extracted_filename}' NOT found at '{code_download_filepath_absolute}'.")
                         text_to_display += f"\n\n*(Warning: The file '{extracted_filename}' mentioned for download could not be found.)*"
 
             # Apply strip to the final text to display, after all extractions
