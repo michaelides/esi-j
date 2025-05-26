@@ -81,6 +81,9 @@ def init_session_state_for_app():
     if "should_generate_prompts" not in st.session_state: # New flag for controlled prompt generation
         st.session_state.should_generate_prompts = False
 
+    if "editing_list_discussion_id" not in st.session_state: # New flag for inline editing in list
+        st.session_state.editing_list_discussion_id = None
+
 
 # --- Helper Function for History Formatting ---
 def format_chat_history(streamlit_messages: list[dict[str, Any]]) -> list[ChatMessage]:
@@ -141,9 +144,11 @@ def handle_user_input(chat_input_value: str | None):
     prompt_to_process = None
 
     if hasattr(st.session_state, 'prompt_to_use') and st.session_state.prompt_to_use:
+        st.session_state.editing_list_discussion_id = None # Exit edit mode if a prompt is used
         prompt_to_process = st.session_state.prompt_to_use
         st.session_state.prompt_to_use = None
     elif chat_input_value:
+        st.session_state.editing_list_discussion_id = None # Exit edit mode if chat input is used
         prompt_to_process = chat_input_value
 
     if prompt_to_process:
@@ -179,6 +184,7 @@ def _create_new_discussion_session():
     # Initialize messages with a greeting
     st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}] # Direct call to agent.py
     st.session_state.should_generate_prompts = True # Set flag to generate new prompts
+    st.session_state.editing_list_discussion_id = None # Exit any inline editing mode
 
     _refresh_discussion_list()
     print(f"New discussion created and set as current: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
@@ -197,6 +203,7 @@ def _load_discussion_session(discussion_id: str):
              st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}] # Direct call to agent.py
         
         st.session_state.should_generate_prompts = True # Set flag to generate new prompts
+        st.session_state.editing_list_discussion_id = None # Exit any inline editing mode
         print(f"Loaded discussion: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
     else:
         st.error("Failed to load discussion.")
@@ -218,16 +225,30 @@ def _save_current_discussion():
     else:
         print("Cannot save: No user identified or no current discussion.")
 
-def _delete_current_discussion():
-    """Deletes the currently active discussion."""
-    if st.session_state.user_id and st.session_state.current_discussion_id:
-        user_id = st.session_state.user_id
-        if user_data_manager.delete_discussion(user_id, st.session_state.current_discussion_id):
-            st.success(f"Discussion '{st.session_state.current_discussion_title}' deleted.") # Standardized name
-            st.session_state.current_discussion_id = None
-            st.session_state.current_discussion_title = "New Discussion" # Standardized name
-            st.session_state.messages = [] # Clear messages
-            _refresh_discussion_list()
+def _delete_current_discussion(discussion_id_to_delete: Optional[str] = None):
+    """Deletes the specified discussion or the currently active one if no ID is provided."""
+    target_discussion_id = discussion_id_to_delete if discussion_id_to_delete else st.session_state.current_discussion_id
+
+    if st.session_state.user_id and target_discussion_id:
+        # Find the title for the success message before deleting
+        deleted_title = "Unknown Discussion"
+        for disc in st.session_state.discussion_list:
+            if disc['id'] == target_discussion_id:
+                deleted_title = disc['title']
+                break
+
+        if user_data_manager.delete_discussion(st.session_state.user_id, target_discussion_id):
+            st.success(f"Discussion '{deleted_title}' deleted.")
+            
+            # If the deleted discussion was the current one, reset current discussion state
+            if target_discussion_id == st.session_state.current_discussion_id:
+                st.session_state.current_discussion_id = None
+                st.session_state.current_discussion_title = "New Discussion"
+                st.session_state.messages = []
+                _create_new_discussion_session() # Automatically start a new discussion
+            else:
+                _refresh_discussion_list() # Just refresh the list if a non-current one was deleted
+            st.session_state.editing_list_discussion_id = None # Exit any inline editing mode
             st.rerun()
         else:
             st.error("Failed to delete discussion.")
@@ -245,6 +266,34 @@ def _refresh_discussion_list():
         st.session_state.discussion_list = sorted(discussions, key=lambda x: x.get('timestamp', ''), reverse=True)
     else:
         st.session_state.discussion_list = []
+
+def _update_listed_discussion_title(discussion_id: str):
+    """Updates the title of a specific discussion in the list and saves it."""
+    new_title = st.session_state[f"edit_title_input_{discussion_id}"] # Get value from the specific text_input
+    
+    # Find the discussion in the list and update its title
+    for i, disc in enumerate(st.session_state.discussion_list):
+        if disc['id'] == discussion_id:
+            st.session_state.discussion_list[i]['title'] = new_title
+            # If it's the current discussion, also update its title
+            if discussion_id == st.session_state.current_discussion_id:
+                st.session_state.current_discussion_title = new_title
+            break
+    
+    # Save the updated discussion to disk
+    # Need to load the full discussion data first, update title, then save
+    discussion_data = user_data_manager.load_discussion(st.session_state.user_id, discussion_id)
+    if discussion_data:
+        discussion_data['title'] = new_title
+        user_data_manager.save_discussion(
+            st.session_state.user_id,
+            discussion_id,
+            new_title, # Pass the new title explicitly
+            discussion_data['messages'] # Pass existing messages
+        )
+        _refresh_discussion_list() # Refresh to ensure list is consistent
+    else:
+        print(f"Warning: Could not find discussion {discussion_id} to update title.")
 
 
 # --- UI Callbacks ---
@@ -307,9 +356,10 @@ def handle_regeneration_request():
 st.session_state._create_new_discussion_session = _create_new_discussion_session
 st.session_state._load_discussion_session = _load_discussion_session
 st.session_state._save_current_discussion = _save_current_discussion
-st.session_state._delete_current_discussion = _delete_current_discussion # Corrected typo here
+st.session_state._delete_current_discussion = _delete_current_discussion
 st.session_state._refresh_discussion_list = _refresh_discussion_list
 st.session_state.handle_regeneration_request = handle_regeneration_request # Expose for stui.py
+st.session_state._update_listed_discussion_title = _update_listed_discussion_title # Expose new function
 
 
 def main():

@@ -73,7 +73,7 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                             code_is_image = True
                             print(f"Detected image file from code interpreter: {code_download_filename}")
                     else:
-                        print(f"Code download file '{extracted_filename}' NOT found at '{code_download_filepath_absolute}'.")
+                        print(f"Code download file '{extracted_filename}' NOT found at '{code_download_absolute_filepath}'.")
                         text_to_display += f"\n\n*(Warning: The file '{extracted_filename}' mentioned for download could not be found.)*"
 
             # Apply strip to the final text to display, after all extractions
@@ -178,17 +178,6 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                         st.session_state.do_regenerate = True # Set flag for app.py to handle
                         st.rerun()
 
-# Removed: _on_discussion_selection_change function as it's no longer needed for selectbox.
-
-
-def _update_discussion_title():
-    """Callback to update the discussion title when the text input changes."""
-    new_title = st.session_state.discussion_title_input
-    if new_title != st.session_state.current_discussion_title:
-        st.session_state.current_discussion_title = new_title
-        st.session_state._save_current_discussion() # Save to update title in file
-        st.session_state._refresh_discussion_list() # Refresh list to show new title in dropdown
-        print(f"Discussion title updated to: {new_title}")
 
 def _get_chat_as_markdown() -> str:
     """Converts the current chat history to a Markdown string."""
@@ -216,28 +205,17 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
             st.session_state._create_new_discussion_session()
             # st.rerun() is called by _create_new_discussion_session
 
-        # Title display/edit logic for the CURRENT discussion
-        # Initialize editing_discussion_title if not present
-        if 'editing_discussion_title' not in st.session_state:
-            st.session_state.editing_discussion_title = False
-
-        if st.session_state.editing_discussion_title:
-            st.text_input(
-                "Edit Current Discussion Title",
-                value=st.session_state.current_discussion_title,
-                key="discussion_title_input",
-                on_change=_update_discussion_title, # Auto-save on change
-                help="Edit the title of the current discussion. Changes are saved automatically."
-            )
-            if st.button("✅ Done Editing", key="done_editing_button", use_container_width=True):
-                st.session_state.editing_discussion_title = False
-                st.rerun()
-        else:
-            # Make the title itself a clickable button to initiate editing
-            if st.button(f"### {st.session_state.current_discussion_title}", key="title_as_button", use_container_width=True):
-                st.session_state.editing_discussion_title = True
-                st.rerun()
-            # Removed the separate "✏️ Edit Title" button
+        # Removed the old "Current Discussion Title" editing block
+        # This block is now replaced by inline editing in the "Your Discussions" list below.
+        # if st.session_state.editing_discussion_title:
+        #     st.text_input(...)
+        #     if st.button("✅ Done Editing", ...):
+        #         st.session_state.editing_discussion_title = False
+        #         st.rerun()
+        # else:
+        #     if st.button(f"### {st.session_state.current_discussion_title}", ...):
+        #         st.session_state.editing_discussion_title = True
+        #         st.rerun()
 
         st.subheader("Your Discussions")
         if not st.session_state.discussion_list:
@@ -245,26 +223,45 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
         else:
             for discussion in st.session_state.discussion_list:
                 is_current = (discussion["id"] == st.session_state.current_discussion_id)
-                button_label = discussion["title"]
                 
-                # Use a unique key for each button
-                button_key = f"load_discussion_{discussion['id']}"
-                
-                # Highlight the current discussion
-                if is_current:
-                    st.markdown(f"**▶️ {button_label}**") # Simple highlight
-                else:
-                    if st.button(button_label, key=button_key, use_container_width=True):
-                        st.session_state._load_discussion_session(discussion["id"])
-                        # st.rerun() is called by _load_discussion_session
+                # Use columns for layout: title/input and delete button
+                # Adjust column width for better display of title and delete button
+                col1, col2 = st.columns([0.8, 0.2])
 
-        # Delete Discussion button
-        if st.button("🗑️ Delete Current Discussion", use_container_width=True, key="delete_discussion_button"):
-            if st.session_state.current_discussion_id:
-                st.session_state._delete_current_discussion()
-            else:
-                st.warning("No discussion selected to delete.")
-            # st.rerun() is called by _delete_current_discussion
+                with col1:
+                    if st.session_state.editing_list_discussion_id == discussion['id']:
+                        # Display text input for editing
+                        st.text_input(
+                            "Edit Title",
+                            value=discussion['title'],
+                            key=f"edit_title_input_{discussion['id']}",
+                            on_change=lambda disc_id=discussion['id']: st.session_state._update_listed_discussion_title(disc_id),
+                            label_visibility="collapsed" # Hide default label
+                        )
+                        # Add a "Done" button to exit edit mode for this specific item
+                        if st.button("✅ Done", key=f"done_edit_{discussion['id']}", use_container_width=True):
+                            st.session_state.editing_list_discussion_id = None
+                            st.rerun()
+                    else:
+                        # Display title as a button (for loading or initiating edit)
+                        # Use markdown to style the button label, especially for the current discussion
+                        button_label = f"**▶️ {discussion['title']}**" if is_current else discussion['title']
+                        if st.button(button_label, key=f"select_or_edit_{discussion['id']}", use_container_width=True):
+                            if is_current:
+                                # If current, click toggles edit mode for this item
+                                st.session_state.editing_list_discussion_id = discussion['id']
+                            else:
+                                # If not current, click loads the discussion
+                                st.session_state._load_discussion_session(discussion['id'])
+                            st.rerun()
+                
+                with col2:
+                    # Delete button for each listed discussion
+                    # Ensure the delete button is aligned and visible
+                    if st.button("🗑️", key=f"delete_listed_{discussion['id']}", help=f"Delete '{discussion['title']}'"):
+                        # This will delete the specific discussion clicked
+                        st.session_state._delete_current_discussion(discussion['id']) # Pass the ID to delete
+                        # st.rerun() is called by _delete_current_discussion
 
         st.markdown("---")
         st.subheader("Download Current Discussion")
