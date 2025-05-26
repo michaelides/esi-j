@@ -8,7 +8,7 @@ from llama_index.core.llms import ChatMessage, MessageRole
 import stui
 from agent import create_unified_agent, generate_suggested_prompts, initialize_settings as initialize_agent_settings, generate_llm_greeting
 from dotenv import load_dotenv
-from streamlit_extras import get_app_data, set_app_data # For cookie-based persistence
+from streamlit_extras.app_data import get_app_data, set_app_data # For cookie-based persistence
 import user_data_manager # New import for user data persistence
 
 # Determine project root based on the script's location
