@@ -1,5 +1,6 @@
 import os
 import random
+import streamlit as st # Import streamlit for caching
 from llama_index.core import Settings
 from llama_index.llms.gemini import Gemini
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
@@ -19,6 +20,7 @@ PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 SUGGESTED_PROMPT_COUNT = 4
 
 # --- Global Settings ---
+@st.cache_resource # Cache the LLM and embedding model initialization
 def initialize_settings():
     """Initializes LlamaIndex settings with Gemini LLM and Embedding model."""
     google_api_key = os.getenv("GOOGLE_API_KEY")
@@ -32,6 +34,7 @@ def initialize_settings():
     Settings.llm = Gemini(model_name="models/gemini-2.5-flash-preview-04-17",
                           api_key=google_api_key,
                           temperature=0.7) 
+    print("LLM settings initialized.")
 
 
 # --- Greeting Generation ---
@@ -68,10 +71,12 @@ def generate_llm_greeting() -> str:
 
 
 # --- Unified Agent Definition ---
+@st.cache_resource # Cache the agent creation
 def create_unified_agent():
     """
     Creates a unified agent with all available tools and a comprehensive system prompt.
     """
+    print("Initializing unified agent for new session (LLM settings should already be done)...")
     all_tools = get_all_tools() # Get all tools from tools.py
 
     if not all_tools:
