@@ -183,6 +183,16 @@ def display_chat():
                         st.session_state.do_regenerate = True
                         st.rerun()
 
+def _on_discussion_selection_change():
+    """Callback for the discussion selection dropdown."""
+    selected_discussion = st.session_state.selected_discussion_dropdown
+    if selected_discussion and selected_discussion["id"] is not None:
+        # An existing discussion was selected
+        st.session_state._load_discussion_session(selected_discussion["id"])
+    elif selected_discussion and selected_discussion["id"] is None:
+        # "➕ New Discussion" was selected
+        st.session_state._create_new_discussion_session()
+
 
 def create_interface():
     """Create the Streamlit UI for the chat interface."""
@@ -216,7 +226,7 @@ def create_interface():
                 format_func=lambda x: x["title"],
                 key="selected_discussion_dropdown",
                 index=current_discussion_index,
-                on_change=st.session_state._set_selected_discussion_from_dropdown # Call app.py's function
+                on_change=_on_discussion_selection_change # Call the new function in stui.py
             )
 
             col1, col2 = st.columns(2)
