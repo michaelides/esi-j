@@ -2,14 +2,14 @@ import streamlit as st
 import os
 import json
 import re
+import uuid # For generating unique user IDs
 from typing import Any, Optional, Dict, List
 from llama_index.core.llms import ChatMessage, MessageRole
 import stui
 from agent import create_unified_agent, generate_suggested_prompts, initialize_settings as initialize_agent_settings, generate_llm_greeting
 from dotenv import load_dotenv
-from streamlit_oauth import OAuth2Component
+from streamlit_extras.app_data import get_app_data, set_app_data # For cookie-based persistence
 import user_data_manager # New import for user data persistence
-import requests # Added for fetching user info from Google OAuth
 
 # Determine project root based on the script's location
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
@@ -31,33 +31,18 @@ AGENT_SESSION_KEY = "esi_unified_agent" # Key for storing unified agent
 DOWNLOAD_MARKER = "---DOWNLOAD_FILE---" # Used by stui.py for display
 RAG_SOURCE_MARKER_PREFIX = "---RAG_SOURCE---" # Used by stui.py for display
 
-# OAuth Configuration
-CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/auth"
-TOKEN_URL = "https://oauth2.googleapis.com/token"
-REFRESH_TOKEN_URL = "https://oauth2.googleapis.com/token"
-REVOKE_TOKEN_URL = "https://oauth2.googleapis.com/revoke"
-
-# Redirect URI for local development. Adjust for deployment.
-# Ensure this matches the authorized redirect URI in your Google Cloud Console.
-REDIRECT_URI = "http://localhost:8501" 
-
-# Scopes for Google user info
-SCOPE = "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile openid"
-
 
 # --- Session State Initialization ---
 def init_session_state_for_app():
     """Initializes core session state variables."""
     if "messages" not in st.session_state:
-        st.session_state.messages = [] # Will be loaded/initialized after login
+        st.session_state.messages = [] # Will be loaded/initialized after user ID is set
 
     if "suggested_prompts" not in st.session_state:
-        st.session_state.suggested_prompts = [] # Will be generated after login/initial greeting
+        st.session_state.suggested_prompts = [] # Will be generated after initial greeting
 
     if "user_info" not in st.session_state:
-        st.session_state.user_info = None # Stores logged-in user's Google info
+        st.session_state.user_info = None # Stores logged-in user's info (now from cookie)
 
     if "current_discussion_id" not in st.session_state:
         st.session_state.current_discussion_id = None # ID of the currently active discussion
@@ -136,8 +121,9 @@ def handle_user_input(chat_input_value: str | None):
     Process user input (either from chat box or suggested prompt)
     and update chat with AI response.
     """
+    # User info should always be present after main() runs
     if not st.session_state.user_info:
-        st.warning("Please log in to start a discussion.")
+        st.error("User not identified. Please refresh the page.")
         return
 
     prompt_to_process = None
@@ -209,7 +195,7 @@ def _save_current_discussion():
         )
         _refresh_discussion_list() # Refresh list to update 'updated_at' or title if changed
     else:
-        print("Cannot save: No user logged in or no current discussion.")
+        print("Cannot save: No user identified or no current discussion.")
 
 def _delete_current_discussion():
     """Deletes the currently active discussion."""
@@ -313,90 +299,64 @@ def main():
     # Initialize agent (stores it in session state)
     initialize_agent()
 
-    # --- Google OAuth Login/Logout ---
-    oauth2 = OAuth2Component(CLIENT_ID, CLIENT_SECRET, AUTHORIZE_URL, TOKEN_URL, REFRESH_TOKEN_URL, REVOKE_TOKEN_URL)
+    # --- User Identification (Cookie-based) ---
+    if "user_info" not in st.session_state or st.session_state.user_info is None:
+        user_id = get_app_data("user_id")
+        if user_id is None:
+            user_id = str(uuid.uuid4())
+            set_app_data("user_id", user_id)
+            print(f"Generated new user ID and set cookie: {user_id}")
+        else:
+            print(f"Loaded user ID from cookie: {user_id}")
+        
+        st.session_state.user_info = {"id": user_id, "name": "Guest User"}
+        
+        # After establishing user_info, load user's discussions
+        _refresh_discussion_list()
+        # If no discussions, create a new one
+        if not st.session_state.all_discussions:
+            _create_new_discussion_session()
+        else: # Load the most recent one
+            _load_discussion_session(st.session_state.all_discussions[0]['id'])
+        st.rerun() # Rerun to apply user_info and load discussion
 
+    # --- Sidebar UI ---
     with st.sidebar:
         st.header("User Account")
-        if st.session_state.user_info:
-            user_email = st.session_state.user_info.get('email', 'N/A')
-            user_name = st.session_state.user_info.get('name', 'User')
-            st.write(f"Logged in as: **{user_name}** ({user_email})")
-            if st.button("Logout", key="logout_button"):
-                oauth2.revoke_token()
-                st.session_state.user_info = None
-                st.session_state.messages = []
-                st.session_state.current_discussion_id = None
-                st.session_state.discussion_title = "New Discussion"
-                st.session_state.all_discussions = []
-                st.session_state.suggested_prompts = []
-                st.rerun()
-        else:
-            result = oauth2.authorize_redirect(
-                name="Login with Google",
-                redirect_uri=REDIRECT_URI,
-                scope=SCOPE,
-                height=600,
-                width=500,
-                key="google_login_button"
-            )
-            if result and result.get("token"):
-                # Fetch user info
-                headers = {"Authorization": f"Bearer {result.get('token')['access_token']}"}
-                user_info_response = requests.get("https://www.googleapis.com/oauth2/v3/userinfo", headers=headers)
-                if user_info_response.status_code == 200:
-                    st.session_state.user_info = user_info_response.json()
-                    print(f"User logged in: {st.session_state.user_info.get('email')}")
-                    # After successful login, load user's discussions
-                    _refresh_discussion_list()
-                    # If no discussions, create a new one
-                    if not st.session_state.all_discussions:
-                        _create_new_discussion_session()
-                    else: # Load the most recent one
-                        _load_discussion_session(st.session_state.all_discussions[0]['id'])
-                    st.rerun()
-                else:
-                    st.error("Failed to fetch user info from Google.")
-                    print(f"Failed to fetch user info: {user_info_response.status_code} - {user_info_response.text}")
-            elif result and result.get("error"):
-                st.error(f"Login failed: {result.get('error')}")
-                print(f"OAuth error: {result.get('error')}")
+        user_name = st.session_state.user_info.get('name', 'User')
+        st.write(f"Logged in as: **{user_name}**")
+        st.info("Your conversations are automatically saved and linked to your browser. Clearing browser data may remove your saved discussions.")
+        
+        # No explicit logout button needed for cookie-based system, as it's persistent.
+        # User can clear browser cookies if they want to "log out" or start fresh.
 
-    # Only show chat interface if logged in
-    if st.session_state.user_info:
-        # Handle regeneration request if flag is set
-        if st.session_state.get("do_regenerate", False):
-            handle_regeneration_request()
+    # --- Main Chat Interface ---
+    # Handle regeneration request if flag is set
+    if st.session_state.get("do_regenerate", False):
+        handle_regeneration_request()
 
-        # Create the rest of the interface using stui (displays chat history, sidebar, etc.)
-        stui.create_interface()
+    # Create the rest of the interface using stui (displays chat history, sidebar, etc.)
+    stui.create_interface()
 
-        # Display suggested prompts as a dropdown below the chat history
-        st.selectbox(
-            "Select a suggested prompt:",
-            options=[""] + st.session_state.suggested_prompts,
-            key="selected_prompt_dropdown",
-            placeholder="Select a suggested prompt...",
-            on_change=set_selected_prompt_from_dropdown
-        )
+    # Display suggested prompts as a dropdown below the chat history
+    st.selectbox(
+        "Select a suggested prompt:",
+        options=[""] + st.session_state.suggested_prompts,
+        key="selected_prompt_dropdown",
+        placeholder="Select a suggested prompt...",
+        on_change=set_selected_prompt_from_dropdown
+    )
 
-        # Render the chat input box at the bottom, capture its value
-        chat_input_value = st.chat_input("Ask me about dissertations, research methods, academic writing, etc.")
+    # Render the chat input box at the bottom, capture its value
+    chat_input_value = st.chat_input("Ask me about dissertations, research methods, academic writing, etc.")
 
-        # Handle user input (either from chat box or a clicked suggested prompt button)
-        handle_user_input(chat_input_value)
-    else:
-        st.info("Please log in with your Google account to start using ESI and access persistent memory features.")
-        st.image("https://www.uea.ac.uk/documents/20145/1000000/UEA_Logo_RGB_White_Background.jpg", width=200)
-        st.markdown("---")
-        st.markdown("Welcome to ESI, your AI assistant for dissertation support. Log in to save your conversations!")
+    # Handle user input (either from chat box or a clicked suggested prompt button)
+    handle_user_input(chat_input_value)
 
 
 if __name__ == "__main__":
-    # Display a warning if environment variables are missing
+    # Display a warning if Google API Key is missing
     if not os.getenv("GOOGLE_API_KEY"):
         st.warning("⚠️ GOOGLE_API_KEY environment variable not set. The agent may not work properly.")
-    if not CLIENT_ID or not CLIENT_SECRET:
-        st.warning("⚠️ GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET environment variables not set. Google login will not work.")
 
     main()

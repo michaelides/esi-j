@@ -75,7 +75,7 @@ def display_chat():
                     code_download_filepath_absolute = os.path.join(PROJECT_ROOT, code_download_filepath_relative)
 
                     if extracted_filename and os.path.exists(code_download_filepath_absolute):
-                        print(f"Code download file exists at: {code_download_filepath_absolute}")
+                        print(f"Code download file exists at: {code_download_filepath_filepath_absolute}")
                         image_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff']
                         if os.path.splitext(code_download_filename)[1].lower() in image_extensions:
                             code_is_image = True
@@ -206,9 +206,10 @@ def create_interface():
     # Create sidebar
     with st.sidebar:
         # User Account section is now handled directly in app.py main()
+        # It will always show "Guest User" and a message about cookie persistence.
 
         st.header("Discussions")
-        if st.session_state.user_info:
+        if st.session_state.user_info: # This check should always be true now
             # Dropdown to select existing discussions
             discussion_options = [{"id": None, "title": "➕ New Discussion"}] + st.session_state.all_discussions
             
@@ -254,8 +255,8 @@ def create_interface():
             # st.button("Download as PDF (Coming Soon)", disabled=True)
             # st.button("Download as DOCX (Coming Soon)", disabled=True)
 
-        else:
-            st.info("Log in to enable persistent discussions.")
+        # The else block for "Log in to enable persistent discussions." is removed
+        # as user identification is now automatic.
 
         st.divider()
         st.header("About ESI")

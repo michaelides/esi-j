@@ -18,4 +18,4 @@ faiss-cpu
 sentence-transformers
 huggingface_hub
 datasets
-streamlit-oauth
+streamlit-extras
