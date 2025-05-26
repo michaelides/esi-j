@@ -310,7 +310,7 @@ def main():
         user_id = cookies.get("user_id")
         if user_id is None:
             user_id = str(uuid.uuid4())
-            cookies.set("user_id", user_id)
+            cookies.set("user_id", user_id, max_age=31536000) # <-- This line needs modification
             print(f"Generated new user ID and set cookie: {user_id}")
         else:
             print(f"Loaded user ID from cookie: {user_id}")
