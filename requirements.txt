@@ -18,4 +18,4 @@ faiss-cpu
 sentence-transformers
 huggingface_hub
 datasets
-st-cookies
+st-cookie
