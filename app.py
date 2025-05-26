@@ -8,7 +8,9 @@ from llama_index.core.llms import ChatMessage, MessageRole
 import stui
 from agent import create_unified_agent, generate_suggested_prompts, initialize_settings as initialize_agent_settings, generate_llm_greeting
 from dotenv import load_dotenv
-from streamlit_cookies_manager import CookieManager # For cookie-based persistence
+
+# Moved import to after set_page_config to ensure it's not the cause of the "first command" error
+# from streamlit_cookies_manager import CookieManager # For cookie-based persistence
 import user_data_manager # New import for user data persistence
 
 # Determine project root based on the script's location
@@ -24,6 +26,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Now import CookieManager after set_page_config
+from streamlit_cookies_manager import CookieManager # For cookie-based persistence
 
 
 # --- Constants and Configuration ---
