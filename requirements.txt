@@ -1,1 +1,21 @@
-pip install -r requirements.txt
+streamlit
+langchain
+langchain-google-genai
+python-dotenv
+duckduckgo-search
+tavily-python
+wikipedia
+langchain-community
+langchain-experimental
+unstructured
+unstructured-client
+unstructured-inference
+pdfminer.six
+markdownify
+bs4
+html2text
+faiss-cpu
+sentence-transformers
+huggingface_hub
+datasets
+streamlit-extras
