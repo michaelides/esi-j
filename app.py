@@ -408,6 +408,9 @@ def main():
             print(f"Fell back to temporary user ID: {user_id}")
 
         st.session_state.user_id = user_id
+        # !!! SET THE FLAG IMMEDIATELY AFTER USER_ID IS SECURED !!!
+        st.session_state.user_id_initialized = True 
+        print(f"User ID initialized and flag set for user: {st.session_state.user_id}") # Debug print
         
         # Populate discussion list for the first time
         st.session_state.discussion_list = sorted(
@@ -459,7 +462,7 @@ def main():
                 )
                 print(f"New discussion created as fallback: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
 
-        st.session_state.user_id_initialized = True # Set flag to prevent re-execution of this block
+        # Moved st.session_state.user_id_initialized = True to earlier in the block
         # Removed st.rerun() here. If UI updates are needed,
         # they should occur naturally or be triggered more specifically.
         # This aims to prevent potential re-triggering of prompt generation
