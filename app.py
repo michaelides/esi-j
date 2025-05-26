@@ -365,15 +365,6 @@ def main():
             _load_discussion_session(st.session_state.discussion_list[0]['id']) # Standardized name
         st.rerun() # Rerun to apply user_info and load discussion
 
-    # --- Sidebar UI ---
-    with st.sidebar:
-        st.header("User Account")
-        st.write(f"Logged in as: **Guest User**") # User ID is internal, not displayed as name
-        st.info("Your conversations are automatically saved and linked to your browser. Clearing browser data may remove your saved discussions.")
-        
-        # No explicit logout button needed for cookie-based system, as it's persistent.
-        # User can clear browser cookies if they want to "log out" or start fresh.
-
     # --- Main Chat Interface ---
     # Handle regeneration request if flag is set
     if st.session_state.get("do_regenerate", False):

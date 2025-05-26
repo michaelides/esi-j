@@ -175,7 +175,7 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                 
                 if can_regenerate:
                     if st.button("🔄", key=f"regenerate_{msg_idx}", help="Regenerate Response"):
-                        st.session_state.handle_regeneration_request()
+                        st.session_state.do_regenerate = True # Set flag for app.py to handle
                         st.rerun()
 
 def _on_discussion_selection_change():
