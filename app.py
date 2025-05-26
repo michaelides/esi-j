@@ -460,7 +460,10 @@ def main():
                 print(f"New discussion created as fallback: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
 
         st.session_state.user_id_initialized = True # Set flag to prevent re-execution of this block
-        st.rerun() # Rerun once to ensure the UI updates correctly after initial setup
+        # Removed st.rerun() here. If UI updates are needed,
+        # they should occur naturally or be triggered more specifically.
+        # This aims to prevent potential re-triggering of prompt generation
+        # if this rerun was causing should_generate_prompts to be evaluated an extra time.
 
     # --- Ensure a current discussion is always active after initial setup ---
     # This handles cases where the last discussion was deleted, or initial load failed.
