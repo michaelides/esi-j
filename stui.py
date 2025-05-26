@@ -178,12 +178,7 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                         st.session_state.do_regenerate = True # Set flag for app.py to handle
                         st.rerun()
 
-def _on_discussion_selection_change():
-    """Callback for the discussion selection dropdown."""
-    selected_discussion_id = st.session_state.selected_discussion_id
-    if selected_discussion_id: # If an existing discussion was selected
-        st.session_state._load_discussion_session(selected_discussion_id)
-    # If "➕ New Discussion" was selected, the "New Discussion" button handles it.
+# Removed: _on_discussion_selection_change function as it's no longer needed for selectbox.
 
 
 def _update_discussion_title():
@@ -219,28 +214,26 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
         # New Discussion button
         if st.button("➕ New Discussion", use_container_width=True, key="new_discussion_button"):
             st.session_state._create_new_discussion_session()
-            st.rerun()
+            # st.rerun() is called by _create_new_discussion_session
 
-        # Dropdown to select existing discussions
-        discussion_options = {d["id"]: d["title"] for d in st.session_state.discussion_list} # Standardized name
-        
-        # Find the index of the current discussion in the options list
-        current_discussion_index = 0
-        if st.session_state.current_discussion_id:
-            for i, disc_id in enumerate(discussion_options.keys()):
-                if disc_id == st.session_state.current_discussion_id:
-                    current_discussion_index = i
-                    break
-
-        st.selectbox(
-            "Select or create a discussion:",
-            options=list(discussion_options.keys()),
-            format_func=lambda x: discussion_options[x],
-            key="selected_discussion_id",
-            index=current_discussion_index,
-            on_change=_on_discussion_selection_change,
-            help="Choose an existing discussion to load."
-        )
+        st.subheader("Your Discussions")
+        if not st.session_state.discussion_list:
+            st.info("No discussions yet. Start a new one!")
+        else:
+            for discussion in st.session_state.discussion_list:
+                is_current = (discussion["id"] == st.session_state.current_discussion_id)
+                button_label = discussion["title"]
+                
+                # Use a unique key for each button
+                button_key = f"load_discussion_{discussion['id']}"
+                
+                # Highlight the current discussion
+                if is_current:
+                    st.markdown(f"**▶️ {button_label}**") # Simple highlight
+                else:
+                    if st.button(button_label, key=button_key, use_container_width=True):
+                        st.session_state._load_discussion_session(discussion["id"])
+                        # st.rerun() is called by _load_discussion_session
 
         # Discussion Title Editor (moved to sidebar)
         st.text_input(
@@ -257,7 +250,7 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                 st.session_state._delete_current_discussion()
             else:
                 st.warning("No discussion selected to delete.")
-            st.rerun() # Rerun after deletion to update UI
+            # st.rerun() is called by _delete_current_discussion
 
         st.markdown("---")
         st.subheader("Download Current Discussion")

@@ -242,9 +242,14 @@ def _delete_current_discussion():
         st.warning("No discussion selected to delete.")
 
 def _refresh_discussion_list():
-    """Refreshes the list of discussions for the current user."""
+    """Refreshes the list of discussions for the current user, sorted by most recent."""
     if st.session_state.user_id:
-        st.session_state.discussion_list = user_data_manager.list_discussions(st.session_state.user_id) # Standardized name
+        discussions = user_data_manager.list_discussions(st.session_state.user_id)
+        # Sort by 'timestamp' in descending order (most recent first)
+        # Assuming each discussion dictionary has a 'timestamp' key.
+        # If 'timestamp' is not present, .get('timestamp', '') will return an empty string,
+        # which will still allow sorting without crashing, though the order might not be ideal.
+        st.session_state.discussion_list = sorted(discussions, key=lambda x: x.get('timestamp', ''), reverse=True)
     else:
         st.session_state.discussion_list = []
 
