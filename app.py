@@ -243,15 +243,6 @@ def _refresh_discussion_list():
     else:
         st.session_state.discussion_list = []
 
-# Expose these functions to st.session_state so stui.py can call them
-# This block MUST be before stui.create_interface() call
-st.session_state._create_new_discussion_session = _create_new_discussion_session
-st.session_state._load_discussion_session = _load_discussion_session
-st.session_state._save_current_discussion = _save_current_discussion
-st.session_state._delete_current_discussion = _delete_discussion
-st.session_state._refresh_discussion_list = _refresh_discussion_list
-st.session_state.handle_regeneration_request = handle_regeneration_request # Expose for stui.py
-
 
 # --- UI Callbacks ---
 def set_selected_prompt_from_dropdown():
@@ -305,6 +296,16 @@ def handle_regeneration_request():
     _save_current_discussion() # Save the regenerated response
     st.session_state.suggested_prompts = generate_suggested_prompts(st.session_state.messages)
     st.rerun()
+
+
+# Expose these functions to st.session_state so stui.py can call them
+# This block MUST be before stui.create_interface() call
+st.session_state._create_new_discussion_session = _create_new_discussion_session
+st.session_state._load_discussion_session = _load_discussion_session
+st.session_state._save_current_discussion = _save_current_discussion
+st.session_state._delete_current_discussion = _delete_current_discussion # Corrected typo here
+st.session_state._refresh_discussion_list = _refresh_discussion_list
+st.session_state.handle_regeneration_request = handle_regeneration_request # Expose for stui.py
 
 
 def main():
