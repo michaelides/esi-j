@@ -241,7 +241,8 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
 
                 with col_options:
                     # Popover for options - Changed icon to vertical ellipsis
-                    with st.popover("⋮", use_container_width=True, key=f"options_popover_{discussion['id']}"):
+                    # Removed 'key' argument as st.popover does not accept it directly
+                    with st.popover("⋮", use_container_width=True):
                         st.write(f"Options for: **{discussion['title']}**")
                         
                         # Option to edit title
