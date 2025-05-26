@@ -381,14 +381,14 @@ def main():
         RAG_SOURCE_MARKER_PREFIX=RAG_SOURCE_MARKER_PREFIX
     )
 
-    # Display suggested prompts as a dropdown below the chat history
-    st.selectbox(
-        "Select a suggested prompt:",
-        options=[""] + st.session_state.suggested_prompts,
-        key="selected_prompt_dropdown",
-        placeholder="Select a suggested prompt...",
-        on_change=set_selected_prompt_from_dropdown
-    )
+    # Removed the st.selectbox for suggested prompts
+    # st.selectbox(
+    #     "Select a suggested prompt:",
+    #     options=[""] + st.session_state.suggested_prompts,
+    #     key="selected_prompt_dropdown",
+    #     placeholder="Select a suggested prompt...",
+    #     on_change=set_selected_prompt_from_dropdown
+    # )
 
     # Render the chat input box at the bottom, capture its value
     chat_input_value = st.chat_input("Ask me about dissertations, research methods, academic writing, etc.")
