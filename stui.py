@@ -216,6 +216,28 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
             st.session_state._create_new_discussion_session()
             # st.rerun() is called by _create_new_discussion_session
 
+        # Title display/edit logic for the CURRENT discussion
+        # Initialize editing_discussion_title if not present
+        if 'editing_discussion_title' not in st.session_state:
+            st.session_state.editing_discussion_title = False
+
+        if st.session_state.editing_discussion_title:
+            st.text_input(
+                "Edit Current Discussion Title",
+                value=st.session_state.current_discussion_title,
+                key="discussion_title_input",
+                on_change=_update_discussion_title, # Auto-save on change
+                help="Edit the title of the current discussion. Changes are saved automatically."
+            )
+            if st.button("✅ Done Editing", key="done_editing_button", use_container_width=True):
+                st.session_state.editing_discussion_title = False
+                st.rerun()
+        else:
+            st.markdown(f"### Current: {st.session_state.current_discussion_title}")
+            if st.button("✏️ Edit Title", key="edit_title_button", use_container_width=True):
+                st.session_state.editing_discussion_title = True
+                st.rerun()
+
         st.subheader("Your Discussions")
         if not st.session_state.discussion_list:
             st.info("No discussions yet. Start a new one!")
@@ -234,15 +256,6 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                     if st.button(button_label, key=button_key, use_container_width=True):
                         st.session_state._load_discussion_session(discussion["id"])
                         # st.rerun() is called by _load_discussion_session
-
-        # Discussion Title Editor (moved to sidebar)
-        st.text_input(
-            "Edit Discussion Title",
-            value=st.session_state.current_discussion_title, # Standardized name
-            key="discussion_title_input",
-            on_change=_update_discussion_title, # Auto-save on change
-            help="Edit the title of the current discussion. Changes are saved automatically."
-        )
 
         # Delete Discussion button
         if st.button("🗑️ Delete Current Discussion", use_container_width=True, key="delete_discussion_button"):
