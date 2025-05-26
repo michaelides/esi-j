@@ -240,7 +240,6 @@ st.session_state._load_discussion_session = _load_discussion_session
 st.session_state._save_current_discussion = _save_current_discussion
 st.session_state._delete_current_discussion = _delete_current_discussion
 st.session_state._refresh_discussion_list = _refresh_discussion_list
-st.session_state._set_selected_discussion_from_dropdown = _set_selected_discussion_from_dropdown
 
 
 # --- UI Callbacks ---
