@@ -205,9 +205,32 @@ def create_interface():
     
     # Create sidebar
     with st.sidebar:
-        # User Account section is now handled directly in app.py main()
-        # It will always show "Guest User" and a message about cookie persistence.
+        # User Account section is removed from here, now handled in app.py main()
+        # and only shows a generic message about cookie persistence.
 
+        st.header("About ESI")
+        st.info("ESI uses AI to help you navigate the dissertation process. It has access to some of the literature in your reading lists and also uses search tools for web lookups.")
+        st.warning("⚠️  Remember: Always consult your dissertation supervisor for final guidance and decisions.")
+
+        st.divider()
+
+        # Add Temperature Slider
+        st.header("LLM Settings")
+        st.slider(
+            "Creativity (Temperature)",
+            min_value=0.0,
+            max_value=2.0,
+            value=st.session_state.get("llm_temperature", 0.7),
+            step=0.1,
+            key="llm_temperature",
+            help="Controls the randomness of the AI's responses. Lower values are more focused, higher values are more creative."
+        )
+
+        st.divider()
+        st.info("Made for NBS7091A and NBS7095x")
+        
+        st.divider()
+        # Discussions section moved here
         st.header("Discussions")
         if st.session_state.user_info: # This check should always be true now
             # Dropdown to select existing discussions
@@ -255,31 +278,6 @@ def create_interface():
             # st.button("Download as PDF (Coming Soon)", disabled=True)
             # st.button("Download as DOCX (Coming Soon)", disabled=True)
 
-        # The else block for "Log in to enable persistent discussions." is removed
-        # as user identification is now automatic.
-
-        st.divider()
-        st.header("About ESI")
-        st.info("ESI uses AI to help you navigate the dissertation process. It has access to some of the literature in your reading lists and also uses search tools for web lookups.")
-        st.warning("⚠️  Remember: Always consult your dissertation supervisor for final guidance and decisions.")
-
-        st.divider()
-
-        # Add Temperature Slider
-        st.header("LLM Settings")
-        st.slider(
-            "Creativity (Temperature)",
-            min_value=0.0,
-            max_value=2.0,
-            value=st.session_state.get("llm_temperature", 0.7),
-            step=0.1,
-            key="llm_temperature",
-            help="Controls the randomness of the AI's responses. Lower values are more focused, higher values are more creative."
-        )
-
-        st.divider()
-        st.info("Made for NBS7091A and NBS7095x")
-        
         st.divider()
         if st.button("🔄 Reset Current Chat", key="reset_chat_button", help="Clears the current conversation and starts a new one, saving the old one."):
             st.session_state.reset_chat_callback() # Call app.py's function
