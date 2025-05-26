@@ -1,7 +1,6 @@
 import streamlit as st
 import os
 import json
-import re
 import uuid # For generating unique user IDs
 from typing import Any, Optional, Dict, List
 from llama_index.core.llms import ChatMessage, MessageRole
@@ -9,8 +8,6 @@ import stui
 from agent import create_unified_agent, generate_suggested_prompts, initialize_settings as initialize_agent_settings, generate_llm_greeting
 from dotenv import load_dotenv
 
-# Moved import to after set_page_config to ensure it's not the cause of the "first command" error
-# from streamlit_cookies_manager import CookieManager # For cookie-based persistence
 import user_data_manager # New import for user data persistence
 
 # Determine project root based on the script's location
@@ -312,19 +309,6 @@ def _get_discussion_markdown(discussion_id: str) -> str:
 
 
 # --- UI Callbacks ---
-def set_selected_prompt_from_dropdown():
-    """Callback function to set the selected prompt from the dropdown."""
-    prompt = st.session_state.get("selected_prompt_dropdown", "")
-    if prompt:
-        st.session_state.prompt_to_use = prompt
-
-def reset_chat_callback():
-    """Resets the current chat history and suggested prompts to their initial state."""
-    print("Resetting current chat...")
-    # This will create a new discussion if one isn't active, or clear the current one
-    _create_new_discussion_session()
-    st.rerun()
-
 def handle_regeneration_request():
     """Handles the request to regenerate the last assistant response."""
     if not st.session_state.get("do_regenerate", False):
@@ -422,7 +406,7 @@ def main():
             _create_new_discussion_session()
         else:
             _load_discussion_session(st.session_state.discussion_list[0]['id'])
-        st.rerun()
+        # Removed redundant st.rerun() here, as _create_new_discussion_session or _load_discussion_session already call it.
 
     # --- Main Chat Interface ---
     # Handle regeneration request if flag is set
