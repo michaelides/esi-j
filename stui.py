@@ -75,7 +75,7 @@ def display_chat():
                     code_download_filepath_absolute = os.path.join(PROJECT_ROOT, code_download_filepath_relative)
 
                     if extracted_filename and os.path.exists(code_download_filepath_absolute):
-                        print(f"Code download file exists at: {code_download_filepath_filepath_absolute}")
+                        print(f"Code download file exists at: {code_download_filepath_absolute}")
                         image_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff']
                         if os.path.splitext(code_download_filename)[1].lower() in image_extensions:
                             code_is_image = True
