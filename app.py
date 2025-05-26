@@ -295,6 +295,21 @@ def _update_listed_discussion_title(discussion_id: str):
     else:
         print(f"Warning: Could not find discussion {discussion_id} to update title.")
 
+def _get_discussion_markdown(discussion_id: str) -> str:
+    """Loads a specific discussion and converts its chat history to a Markdown string."""
+    user_id = st.session_state.user_id
+    discussion_data = user_data_manager.load_discussion(user_id, discussion_id)
+    
+    if not discussion_data:
+        return "Discussion not found."
+
+    markdown_content = f"# Discussion: {discussion_data.get('title', 'Untitled Discussion')}\n\n"
+    for message in discussion_data.get('messages', []):
+        role = message["role"].capitalize()
+        content = message["content"]
+        markdown_content += f"## {role}\n{content}\n\n"
+    return markdown_content
+
 
 # --- UI Callbacks ---
 def set_selected_prompt_from_dropdown():
@@ -360,6 +375,7 @@ st.session_state._delete_current_discussion = _delete_current_discussion
 st.session_state._refresh_discussion_list = _refresh_discussion_list
 st.session_state.handle_regeneration_request = handle_regeneration_request # Expose for stui.py
 st.session_state._update_listed_discussion_title = _update_listed_discussion_title # Expose new function
+st.session_state._get_discussion_markdown = _get_discussion_markdown # Expose new function
 
 
 def main():
