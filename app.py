@@ -388,29 +388,31 @@ def main():
     # This block should only run once per session to set up user_id and initial discussion
     if not st.session_state.user_id_initialized:
         print("Initial user/discussion setup running...") # Add a debug print
+        
         user_id = None
         try:
-            user_id = cookies["user_id"]
-            if not user_id: # If cookie exists but is empty
+            user_id = cookies["user_id"] # Attempt to load from cookie
+            if not user_id: 
                 raise KeyError("User ID cookie empty")
             print(f"Loaded user ID from cookie: {user_id}")
         except KeyError:
             print("User ID cookie not found or empty, generating a new one.")
             user_id = str(uuid.uuid4())
-            cookies["user_id"] = user_id
-            cookies.save()
+            cookies["user_id"] = user_id # Set it in the cookie
+            cookies.save() # Save the cookie
             print(f"Generated new user ID and set cookie: {user_id}")
-        except Exception as e:
+        except Exception as e: # Catch other potential cookie errors
             st.error(f"An unexpected error occurred with cookies: {e}. Please try clearing your browser cookies for this site.")
-            if 'user_id_temp' not in st.session_state:
+            if 'user_id_temp' not in st.session_state: # Fallback to a temporary session ID
                 st.session_state.user_id_temp = str(uuid.uuid4())
             user_id = st.session_state.user_id_temp
             print(f"Fell back to temporary user ID: {user_id}")
 
-        st.session_state.user_id = user_id
-        # !!! SET THE FLAG IMMEDIATELY AFTER USER_ID IS SECURED !!!
+        st.session_state.user_id = user_id # Assign the determined user_id to session state
+        
+        # !!! ENSURE THIS FLAG IS SET IMMEDIATELY AFTER user_id IS DETERMINED !!!
         st.session_state.user_id_initialized = True 
-        print(f"User ID initialized and flag set for user: {st.session_state.user_id}") # Debug print
+        print(f"User ID initialized and flag set for user: {st.session_state.user_id}") 
         
         # Populate discussion list for the first time
         st.session_state.discussion_list = sorted(
