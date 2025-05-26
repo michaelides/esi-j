@@ -81,6 +81,9 @@ def init_session_state_for_app():
     if "editing_list_discussion_id" not in st.session_state: # New flag for inline editing in list
         st.session_state.editing_list_discussion_id = None
 
+    if "user_id_initialized" not in st.session_state: # New flag to control initial setup
+        st.session_state.user_id_initialized = False
+
 
 # --- Helper Function for History Formatting ---
 def format_chat_history(streamlit_messages: list[dict[str, Any]]) -> list[ChatMessage]:
@@ -117,7 +120,7 @@ def get_agent_response(query: str, chat_history: list[ChatMessage]) -> str:
             print("Warning: Could not access LLM object within the agent to set temperature. Agent or worker structure might have changed (_agent_worker or _agent_worker._llm not found).")
 
         with st.spinner("ESI is thinking..."):
-            response = agent.chat(query, chat_history=chat_history)
+            response = agent.chat(query, chat_history=chat_history) # Corrected: chat_history was formatted_history
 
         response_text = response.response if hasattr(response, 'response') else str(response)
 
@@ -149,9 +152,11 @@ def handle_user_input(chat_input_value: str | None):
         prompt_to_process = chat_input_value
 
     if prompt_to_process:
-        # If no discussion is active, create a new one
+        # If no discussion is active, create a new one (this should ideally be handled by main loop)
+        # This check is a fallback, but the main loop should ensure current_discussion_id is set.
         if not st.session_state.current_discussion_id:
-            _create_new_discussion_session()
+            _create_new_discussion_session() # This will set the current discussion and messages
+            # No rerun here, as the subsequent append/get_agent_response will trigger it.
 
         st.session_state.messages.append({"role": "user", "content": prompt_to_process})
 
@@ -185,7 +190,7 @@ def _create_new_discussion_session():
 
     _refresh_discussion_list()
     print(f"New discussion created and set as current: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
-    st.rerun()
+    # Removed st.rerun() here. State changes should trigger re-render.
 
 def _load_discussion_session(discussion_id: str):
     """Loads an existing discussion and sets it as current."""
@@ -205,8 +210,8 @@ def _load_discussion_session(discussion_id: str):
     else:
         st.error("Failed to load discussion.")
         print(f"Failed to load discussion with ID: {discussion_id}")
-        _create_new_discussion_session() # Fallback to new discussion if load fails
-    st.rerun()
+    _refresh_discussion_list() # Refresh list to ensure current discussion is highlighted
+    # Removed st.rerun() here. State changes should trigger re-render.
 
 def _save_current_discussion():
     """Saves the current discussion to persistent storage."""
@@ -242,11 +247,11 @@ def _delete_current_discussion(discussion_id_to_delete: Optional[str] = None):
                 st.session_state.current_discussion_id = None
                 st.session_state.current_discussion_title = "New Discussion"
                 st.session_state.messages = []
-                _create_new_discussion_session() # Automatically start a new discussion
-            else:
-                _refresh_discussion_list() # Just refresh the list if a non-current one was deleted
+            
+            _refresh_discussion_list() # Always refresh the list after deletion
             st.session_state.editing_list_discussion_id = None # Exit any inline editing mode
-            st.rerun()
+            # Removed st.rerun() here. The state changes should trigger a re-render.
+            # The main loop will handle creating a new discussion if current_discussion_id is None.
         else:
             st.error("Failed to delete discussion.")
     else:
@@ -258,9 +263,10 @@ def _refresh_discussion_list():
         discussions = user_data_manager.list_discussions(st.session_state.user_id)
         # Sort by 'timestamp' in descending order (most recent first)
         # Assuming each discussion dictionary has a 'timestamp' key.
-        # If 'timestamp' is not present, .get('timestamp', '') will return an empty string,
+        # If 'timestamp' is not present, .get('timestamp', '') will return an an empty string,
         # which will still allow sorting without crashing, though the order might not be ideal.
         st.session_state.discussion_list = sorted(discussions, key=lambda x: x.get('timestamp', ''), reverse=True)
+        print(f"Listed {len(st.session_state.discussion_list)} discussions for user {st.session_state.user_id}.")
     else:
         st.session_state.discussion_list = []
 
@@ -373,21 +379,18 @@ def main():
     if AGENT_SESSION_KEY not in st.session_state:
         st.session_state[AGENT_SESSION_KEY] = create_unified_agent()
 
-    # --- User Identification (Cookie-based) ---
-    if "user_id" not in st.session_state or st.session_state.user_id is None:
+    # --- User Identification and Initial Discussion Load (Cookie-based) ---
+    # This block should only run once per session to set up user_id and initial discussion
+    if not st.session_state.user_id_initialized:
+        print("Initial user/discussion setup running...") # Add a debug print
         user_id = None
         try:
             user_id = cookies["user_id"]
-            if user_id:
-                print(f"Loaded user ID from cookie: {user_id}")
-            else:
-                print("User ID cookie was empty, generating a new one.")
-                user_id = str(uuid.uuid4())
-                cookies["user_id"] = user_id
-                cookies.save()
-                print(f"Generated new user ID and set cookie: {user_id}")
+            if not user_id: # If cookie exists but is empty
+                raise KeyError("User ID cookie empty")
+            print(f"Loaded user ID from cookie: {user_id}")
         except KeyError:
-            print("User ID cookie not found, generating a new one.")
+            print("User ID cookie not found or empty, generating a new one.")
             user_id = str(uuid.uuid4())
             cookies["user_id"] = user_id
             cookies.save()
@@ -401,12 +404,64 @@ def main():
 
         st.session_state.user_id = user_id
         
-        _refresh_discussion_list()
+        # Populate discussion list for the first time
+        st.session_state.discussion_list = sorted(
+            user_data_manager.list_discussions(st.session_state.user_id),
+            key=lambda x: x.get('timestamp', ''), reverse=True
+        )
+        print(f"Initial discussion list populated with {len(st.session_state.discussion_list)} items.")
+
         if not st.session_state.discussion_list:
-            _create_new_discussion_session()
+            # If no discussions exist, create a new one directly in session state
+            new_title = f"Research idea {st.session_state.next_research_idea_number}"
+            st.session_state.next_research_idea_number += 1
+            new_discussion_meta = user_data_manager.create_new_discussion(user_id, new_title) # Save to disk
+            st.session_state.current_discussion_id = new_discussion_meta["id"]
+            st.session_state.current_discussion_title = new_discussion_meta["title"]
+            st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}]
+            st.session_state.should_generate_prompts = True
+            # Re-fetch discussion list to include the newly created one
+            st.session_state.discussion_list = sorted(
+                user_data_manager.list_discussions(st.session_state.user_id),
+                key=lambda x: x.get('timestamp', ''), reverse=True
+            )
+            print(f"New discussion created and set as current: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
         else:
-            _load_discussion_session(st.session_state.discussion_list[0]['id'])
-        # Removed redundant st.rerun() here, as _create_new_discussion_session or _load_discussion_session already call it.
+            # Load the most recent discussion
+            most_recent_discussion_id = st.session_state.discussion_list[0]['id']
+            discussion_data = user_data_manager.load_discussion(user_id, most_recent_discussion_id)
+            if discussion_data:
+                st.session_state.current_discussion_id = discussion_data["id"]
+                st.session_state.current_discussion_title = discussion_data.get("title", "Untitled Discussion")
+                st.session_state.messages = discussion_data.get("messages", [])
+                if not st.session_state.messages: # If loaded discussion is empty, add greeting
+                    st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}]
+                st.session_state.should_generate_prompts = True
+                print(f"Loaded initial discussion: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
+            else:
+                st.error("Failed to load initial discussion. Creating a new one.")
+                # Fallback to creating a new discussion if loading fails
+                new_title = f"Research idea {st.session_state.next_research_idea_number}"
+                st.session_state.next_research_idea_number += 1
+                new_discussion_meta = user_data_manager.create_new_discussion(user_id, new_title)
+                st.session_state.current_discussion_id = new_discussion_meta["id"]
+                st.session_state.current_discussion_title = new_discussion_meta["title"]
+                st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}]
+                st.session_state.should_generate_prompts = True
+                st.session_state.discussion_list = sorted( # Refresh list again
+                    user_data_manager.list_discussions(st.session_state.user_id),
+                    key=lambda x: x.get('timestamp', ''), reverse=True
+                )
+                print(f"New discussion created as fallback: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
+
+        st.session_state.user_id_initialized = True # Set flag to prevent re-execution of this block
+        st.rerun() # Rerun once to ensure the UI updates correctly after initial setup
+
+    # --- Ensure a current discussion is always active after initial setup ---
+    # This handles cases where the last discussion was deleted, or initial load failed.
+    if not st.session_state.current_discussion_id:
+        _create_new_discussion_session() # This function no longer calls st.rerun()
+        st.rerun() # Rerun to display the newly created discussion
 
     # --- Main Chat Interface ---
     # Handle regeneration request if flag is set
