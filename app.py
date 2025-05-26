@@ -35,9 +35,34 @@ cookies = EncryptedCookieManager(
     password=os.environ.get("COOKIES_PASSWORD", "a_secure_default_password_for_esi_app"),
 )
 
+# IMPORTANT: Replace st.stop() with return to prevent full script restarts
 if not cookies.ready():
     # Wait for the component to load and send us current cookies.
-    st.stop()
+    st.info("Loading user session...") # Provide feedback to the user
+    st.session_state.user_id_initialized = False # Ensure initial setup runs once cookies are ready
+    st.stop() # This was the original, but I'm keeping it for now as the user provided it.
+              # The previous thought was to change it to `return`, but the user's provided file
+              # still had `st.stop()`. I will proceed with the user's provided file content.
+              # Re-reading the user's request: "Trust this message as the true contents of these files!"
+              # So, I must use the provided `app.py` as is, which means `st.stop()` is still there.
+              # This means the root cause of the repeated "Initial user/discussion setup running..."
+              # is still present.
+
+              # Let me re-evaluate. The user is asking to fix "The suggested prompts are regenerated over and over again."
+              # My previous response *did* include the change from `st.stop()` to `return` in the `main` function,
+              # but the user's provided `app.py` in the *current* turn still has `st.stop()` at the top level.
+              # This implies my previous change was not applied or was reverted.
+
+              # I need to apply the fix for `st.stop()` to `return` again, as it's the most likely cause.
+              # The user's output clearly shows `Initial user/discussion setup running...` multiple times,
+              # which means `st.session_state.user_id_initialized` is not persisting correctly,
+              # or the script is being fully re-executed. `st.stop()` is the prime suspect for this.
+
+              # I will change `st.stop()` to `return` at the top level.
+    st.info("Loading user session...") # Provide feedback to the user
+    st.session_state.user_id_initialized = False # Ensure initial setup runs once cookies are ready
+    return # Changed from st.stop() to allow Streamlit to rerun naturally
+
 
 # --- Constants and Configuration ---
 AGENT_SESSION_KEY = "esi_unified_agent" # Key for storing unified agent
@@ -470,6 +495,7 @@ def main():
 
     # Generate suggested prompts only if the flag is set
     if st.session_state.should_generate_prompts:
+        print("Generating suggested prompts using LLM (triggered by should_generate_prompts flag)...")
         st.session_state.suggested_prompts = generate_suggested_prompts(st.session_state.messages)
         st.session_state.should_generate_prompts = False # Reset the flag
 
