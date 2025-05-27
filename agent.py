@@ -31,7 +31,7 @@ def initialize_settings():
     Settings.embed_model = GoogleGenAIEmbedding(model_name="models/text-embedding-004", api_key=google_api_key)
     # Use a potentially more stable model name and set a default temperature
     # The temperature can be overridden later based on the slider
-    Settings.llm = Gemini(model_name="models/gemini-2.5-flash-preview-04-17",
+    Settings.llm = Gemini(model_name="models/gemini-2.5-flash-preview-05-20",
                           api_key=google_api_key,
                           temperature=0.7) 
     print("LLM settings initialized.")

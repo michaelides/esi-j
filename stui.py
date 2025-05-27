@@ -193,94 +193,98 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
 
     # --- Sidebar UI ---
     with st.sidebar:
+        with st.expander("**Discussion List**", expanded=False, icon = ":material/forum:"): 
+            st.info("Conversations are automarically saved and linked to your browser via cookies. Clearing browser data will remove your saved discussions.")
+            if not st.session_state.discussion_list:
+                st.info("No discussions yet. Start a new one!")
+            else:
+                for discussion in st.session_state.discussion_list:
+                    is_current = (discussion["id"] == st.session_state.current_discussion_id)
+                    
+                    # Use columns for layout: title/input and options popover
+                    col_title, col_options = st.columns([0.8, 0.2])
+
+                    with col_title:
+                        if st.session_state.editing_list_discussion_id == discussion['id']:
+                            # Display text input for editing
+                            st.text_input(
+                                "Edit Title",
+                                value=discussion['title'],
+                                key=f"edit_title_input_{discussion['id']}",
+                                on_change=lambda disc_id=discussion['id']: st.session_state._update_listed_discussion_title(disc_id),
+                                label_visibility="collapsed" # Hide default label
+                            )
+                            # No "Done" button here, as the popover will handle exiting edit mode
+                            # or clicking another discussion will exit it.
+                            # The on_change saves automatically.
+                        else:
+                            # Display title as a button (for loading or initiating edit via popover)
+                            button_label = f"**✦ {discussion['title']}**" if is_current else discussion['title']
+                            if st.button(button_label, key=f"select_discussion_{discussion['id']}", use_container_width=True):
+                                # If not current, click loads the discussion
+                                if not is_current:
+                                    st.session_state._load_discussion_session(discussion['id'])
+                                # If current, clicking the title button does nothing directly,
+                                # editing is handled via the popover.
+                                st.rerun() # Rerun to update UI state
+
+                    with col_options:
+                        # Popover for options - Changed icon to vertical ellipsis
+                        # Removed 'key' argument as st.popover does not accept it directly
+                        with st.popover("⋮", use_container_width=True):
+                            st.write(f"Options for: **{discussion['title']}**")
+                            
+                            # Option to edit title
+                            if st.button("✏️ Edit Title", key=f"edit_from_popover_{discussion['id']}", use_container_width=True):
+                                st.session_state.editing_list_discussion_id = discussion['id']
+                                st.rerun()
+                            
+                            # Option to download
+                            st.download_button(
+                                label="⬇️ Download (.md)",
+                                data=st.session_state._get_discussion_markdown(discussion['id']), # New function call
+                                file_name=f"{discussion['title'].replace(' ', '_')}.md",
+                                mime="text/markdown",
+                                key=f"download_listed_{discussion['id']}",
+                                use_container_width=True
+                            )
+                            
+                            # Option to delete
+                            if st.button("♻ Delete", key=f"delete_from_popover_{discussion['id']}", use_container_width=True):
+                                st.session_state._delete_current_discussion(discussion['id'])
+                                # st.rerun() is called by _delete_current_discussion
+            # New Discussion button
+            if st.button("➕ New Discussion", use_container_width=True, key="new_discussion_button"):
+                st.session_state._create_new_discussion_session()
+                # st.rerun() is called by _create_new_discussion_session
+            # st.divider()
+
         
-        st.header("Discussions")
-        st.info("Your conversations are automatically saved and linked to your browser. Clearing browser data may remove your saved discussions.")
+        with st.expander("**LLM Settings**", expanded=False, icon = ":material/tune:"):
+            st.slider(
+                "Creativity (Temperature)",
+                min_value=0.0,
+                max_value=2.0,
+                value=st.session_state.get("llm_temperature", 0.7),
+                step=0.1,
+                key="llm_temperature",
+                help="Controls the randomness of the AI's responses. Lower values are more focused, higher values are more creative."
+            )
 
-        # New Discussion button
-        if st.button("➕ New Discussion", use_container_width=True, key="new_discussion_button"):
-            st.session_state._create_new_discussion_session()
-            # st.rerun() is called by _create_new_discussion_session
+        # st.divider()
+        # st.header("About ESI")
 
-        st.subheader("Your Discussions")
-        if not st.session_state.discussion_list:
-            st.info("No discussions yet. Start a new one!")
-        else:
-            for discussion in st.session_state.discussion_list:
-                is_current = (discussion["id"] == st.session_state.current_discussion_id)
-                
-                # Use columns for layout: title/input and options popover
-                col_title, col_options = st.columns([0.8, 0.2])
+        with st.expander("**About ESI**", expanded=False, icon = ":material/info:"):
+          st.info("ESI uses AI to help you navigate the dissertation process. It has access to some of the literature in your reading lists and also uses search tools for web lookups.")
+          st.warning("⚠️  Remember: Always consult your dissertation supervisor for final guidance and decisions.")
+          st.info("Made for NBS7091A and NBS7095x")
 
-                with col_title:
-                    if st.session_state.editing_list_discussion_id == discussion['id']:
-                        # Display text input for editing
-                        st.text_input(
-                            "Edit Title",
-                            value=discussion['title'],
-                            key=f"edit_title_input_{discussion['id']}",
-                            on_change=lambda disc_id=discussion['id']: st.session_state._update_listed_discussion_title(disc_id),
-                            label_visibility="collapsed" # Hide default label
-                        )
-                        # No "Done" button here, as the popover will handle exiting edit mode
-                        # or clicking another discussion will exit it.
-                        # The on_change saves automatically.
-                    else:
-                        # Display title as a button (for loading or initiating edit via popover)
-                        button_label = f"**▶️ {discussion['title']}**" if is_current else discussion['title']
-                        if st.button(button_label, key=f"select_discussion_{discussion['id']}", use_container_width=True):
-                            # If not current, click loads the discussion
-                            if not is_current:
-                                st.session_state._load_discussion_session(discussion['id'])
-                            # If current, clicking the title button does nothing directly,
-                            # editing is handled via the popover.
-                            st.rerun() # Rerun to update UI state
-
-                with col_options:
-                    # Popover for options - Changed icon to vertical ellipsis
-                    # Removed 'key' argument as st.popover does not accept it directly
-                    with st.popover("⋮", use_container_width=True):
-                        st.write(f"Options for: **{discussion['title']}**")
-                        
-                        # Option to edit title
-                        if st.button("✏️ Edit Title", key=f"edit_from_popover_{discussion['id']}", use_container_width=True):
-                            st.session_state.editing_list_discussion_id = discussion['id']
-                            st.rerun()
-                        
-                        # Option to download
-                        st.download_button(
-                            label="⬇️ Download as Markdown",
-                            data=st.session_state._get_discussion_markdown(discussion['id']), # New function call
-                            file_name=f"{discussion['title'].replace(' ', '_')}.md",
-                            mime="text/markdown",
-                            key=f"download_listed_{discussion['id']}",
-                            use_container_width=True
-                        )
-                        
-                        # Option to delete
-                        if st.button("🗑️ Delete", key=f"delete_from_popover_{discussion['id']}", use_container_width=True):
-                            st.session_state._delete_current_discussion(discussion['id'])
-                            # st.rerun() is called by _delete_current_discussion
-
-        st.divider()
-
-        st.header("LLM Settings")
-        st.slider(
-            "Creativity (Temperature)",
-            min_value=0.0,
-            max_value=2.0,
-            value=st.session_state.get("llm_temperature", 0.7),
-            step=0.1,
-            key="llm_temperature",
-            help="Controls the randomness of the AI's responses. Lower values are more focused, higher values are more creative."
-        )
-
-        st.divider()
-        st.header("About ESI")
-        st.info("ESI uses AI to help you navigate the dissertation process. It has access to some of the literature in your reading lists and also uses search tools for web lookups.")
-        st.warning("⚠️  Remember: Always consult your dissertation supervisor for final guidance and decisions.")
-        st.info("Made for NBS7091A and NBS7095x")
-        
+        CSS = """
+        .stExpander > details {
+            border: none;
+        }
+        """
+        st.html(f"<style>{CSS}</style>")
     # --- Main Chat Interface ---
     st.title("🎓 ESI: ESI Scholarly Instructor")
     st.caption("Your AI partner for brainstorming and structuring your dissertation research")
