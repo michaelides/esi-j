@@ -195,7 +195,7 @@ def _create_new_discussion_session():
 
     _refresh_discussion_list()
     print(f"New discussion created and set as current: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
-    # Removed st.rerun() here. State changes should trigger re-render.
+    st.rerun() # Rerun to update UI with the new discussion
 
 def _load_discussion_session(discussion_id: str):
     """Loads an existing discussion and sets it as current."""
@@ -421,60 +421,16 @@ def main():
         )
         print(f"Initial discussion list populated with {len(st.session_state.discussion_list)} items.")
 
-        if not st.session_state.discussion_list:
-            # If no discussions exist, create a new one directly in session state
-            new_title = f"Research idea {st.session_state.next_research_idea_number}"
-            st.session_state.next_research_idea_number += 1
-            new_discussion_meta = user_data_manager.create_new_discussion(user_id, new_title) # Save to disk
-            st.session_state.current_discussion_id = new_discussion_meta["id"]
-            st.session_state.current_discussion_title = new_discussion_meta["title"]
-            st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}]
-            st.session_state.should_generate_prompts = True
-            # Re-fetch discussion list to include the newly created one
-            st.session_state.discussion_list = sorted(
-                user_data_manager.list_discussions(st.session_state.user_id),
-                key=lambda x: x.get('timestamp', ''), reverse=True
-            )
-            print(f"New discussion created and set as current: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
-        else:
-            # Load the most recent discussion
-            most_recent_discussion_id = st.session_state.discussion_list[0]['id']
-            discussion_data = user_data_manager.load_discussion(user_id, most_recent_discussion_id)
-            if discussion_data:
-                st.session_state.current_discussion_id = discussion_data["id"]
-                st.session_state.current_discussion_title = discussion_data.get("title", "Untitled Discussion")
-                st.session_state.messages = discussion_data.get("messages", [])
-                if not st.session_state.messages: # If loaded discussion is empty, add greeting
-                    st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}]
-                st.session_state.should_generate_prompts = True
-                print(f"Loaded initial discussion: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
-            else:
-                st.error("Failed to load initial discussion. Creating a new one.")
-                # Fallback to creating a new discussion if loading fails
-                new_title = f"Research idea {st.session_state.next_research_idea_number}"
-                st.session_state.next_research_idea_number += 1
-                new_discussion_meta = user_data_manager.create_new_discussion(user_id, new_title)
-                st.session_state.current_discussion_id = new_discussion_meta["id"]
-                st.session_state.current_discussion_title = new_discussion_meta["title"]
-                st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}]
-                st.session_state.should_generate_prompts = True
-                st.session_state.discussion_list = sorted( # Refresh list again
-                    user_data_manager.list_discussions(st.session_state.user_id),
-                    key=lambda x: x.get('timestamp', ''), reverse=True
-                )
-                print(f"New discussion created as fallback: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
-
-        # Moved st.session_state.user_id_initialized = True to earlier in the block
-        # Removed st.rerun() here. If UI updates are needed,
-        # they should occur naturally or be triggered more specifically.
-        # This aims to prevent potential re-triggering of prompt generation
-        # if this rerun was causing should_generate_prompts to be evaluated an extra time.
+        # Always create a new discussion when the app is first accessed in a session
+        _create_new_discussion_session() # This function will also call st.rerun()
 
     # --- Ensure a current discussion is always active after initial setup ---
     # This handles cases where the last discussion was deleted, or initial load failed.
+    # This check is still important for subsequent runs within the same session
+    # if a discussion is deleted and no new one is explicitly created.
     if not st.session_state.current_discussion_id:
-        _create_new_discussion_session() # This function no longer calls st.rerun()
-        st.rerun() # Rerun to display the newly created discussion
+        _create_new_discussion_session() # This function will call st.rerun()
+        # Removed st.rerun() here as _create_new_discussion_session already calls it.
 
     # --- Main Chat Interface ---
     # Handle regeneration request if flag is set
