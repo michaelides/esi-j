@@ -6,7 +6,7 @@ from typing import Any, Optional, Dict, List
 from llama_index.core.llms import ChatMessage, MessageRole
 import stui
 
-from agent import create_unified_agent, generate_suggested_prompts, initialize_settings as initialize_agent_settings, generate_llm_greeting # StructuredChatResponse removed
+from agent import create_unified_agent, generate_suggested_prompts, initialize_settings as initialize_agent_settings, generate_llm_greeting
 from dotenv import load_dotenv
 
 import user_data_manager # New import for user data persistence
@@ -41,7 +41,6 @@ cookies = EncryptedCookieManager(
 if not cookies.ready():
     # Wait for the component to load and send us current cookies.
     st.info("Loading user session...") # Provide feedback to the user
-    # Removed: st.session_state.user_id_initialized = False # This line was problematic
     st.stop() # Reverted to st.stop() to fix SyntaxError
 
 
@@ -105,13 +104,13 @@ def format_chat_history(streamlit_messages: list[dict[str, Any]]) -> list[ChatMe
 
 
 # --- Agent Interaction ---
-def get_agent_response(query: str, chat_history: list[ChatMessage]) -> StructuredChatResponse:
+def get_agent_response(query: str, chat_history: list[ChatMessage]) -> str:
     """
     Get a response from the agent stored in the session state using the chat method,
     explicitly passing the conversation history. Returns a string response.
     """
     if AGENT_SESSION_KEY not in st.session_state or st.session_state[AGENT_SESSION_KEY] is None:
-        return StructuredChatResponse(answer="Error: Agent not initialized. Please refresh the page.", reasoning=[])
+        return "Error: Agent not initialized. Please refresh the page."
 
     agent_runner = st.session_state[AGENT_SESSION_KEY]
     original_response_text: str
@@ -138,68 +137,9 @@ def get_agent_response(query: str, chat_history: list[ChatMessage]) -> Structure
         print(f"Unified agent final response text for UI: \n{response_text[:500]}...")
         return response_text
 
-
     except Exception as e:
         print(f"Error getting unified agent response: {e}")
-        original_response_text = f"I apologize, but I encountered an error while processing your request with the main agent. Please try again. Technical details: {str(e)}"
-        # Proceed to structuring, so the error is at least in the answer field.
-        return StructuredChatResponse(answer=original_response_text, reasoning=["Error during main agent execution."])
-
-    # --- Structuring Step using a separate Gemini model ---
-    try:
-        print("Attempting to structure agent response...")
-        google_api_key = os.getenv("GOOGLE_API_KEY")
-        if not google_api_key:
-            # This should ideally not happen if the main agent initialized
-            print("Error: GOOGLE_API_KEY not found for structuring model.")
-            return StructuredChatResponse(answer=original_response_text, reasoning=["Error: API key not found for structuring."])
-
-        # Define the structuring prompt
-        structuring_prompt = f"""Original chatbot response:
----
-{original_response_text}
----
-
-Reformat this response into a JSON object with two fields: "answer" and "reasoning".
-- The "answer" field must contain the full original chatbot response, including any special markers like '---RAG_SOURCE---...' or '---DOWNLOAD_FILE---...'.
-- The "reasoning" field must be a list of strings, providing a brief step-by-step explanation of how the original response was likely generated or the key steps taken by the chatbot. If the reasoning is not obvious from the text, provide a general summary of the thought process (e.g., "The agent likely searched its knowledge base for X and then summarized Y.").
-"""
-        # Initialize the Gemini model for structuring
-        # Using "gemini-1.5-flash-latest" for broad availability, target was "gemini-2.5-flash-preview-05-20"
-        structuring_model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash-latest", # Or "gemini-2.5-flash-preview-05-20" if confirmed available
-            api_key=google_api_key,
-            generation_config=genai.types.GenerationConfig(
-                response_mime_type="application/json",
-                response_schema=StructuredChatResponse, # Use the Pydantic model for schema
-                temperature=0.1 # Low temperature for deterministic structuring
-            )
-        )
-
-        with st.spinner("ESI (Structuring) is thinking..."):
-            structured_response_raw = structuring_model.generate_content(structuring_prompt)
-        
-        # The SDK should parse the JSON into the Pydantic model automatically if response_schema is used
-        # and the model output is compliant.
-        if structured_response_raw.candidates and structured_response_raw.candidates[0].content.parts:
-            # For pydantic model schema, the parsed object is often in the .json attribute of the part
-            parsed_json = structured_response_raw.candidates[0].content.parts[0].json
-            structured_chat_response = StructuredChatResponse(**parsed_json)
-            
-            print(f"Structured response generated. Answer: {structured_chat_response.answer[:200]}..., Reasoning: {structured_chat_response.reasoning}")
-            return structured_chat_response
-        else:
-            print("Error: Structuring model did not return valid parsable content.")
-            return StructuredChatResponse(answer=original_response_text, reasoning=["Error: Structuring model returned no valid content."])
-
-    except ValidationError as ve:
-        print(f"Pydantic Validation Error during structuring: {ve}")
-        return StructuredChatResponse(answer=original_response_text, reasoning=[f"Structuring validation error: {str(ve)}"])
-    except Exception as e:
-        print(f"Error during structuring agent response: {e}")
-        # Fallback: return original text in the 'answer' field
-        return StructuredChatResponse(answer=original_response_text, reasoning=[f"Error during structuring: {str(e)}"])
-
+        return f"I apologize, but I encountered an error while processing your request with the main agent. Please try again. Technical details: {str(e)}"
 
 
 def handle_user_input(chat_input_value: str | None):
