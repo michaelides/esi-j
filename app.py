@@ -5,8 +5,10 @@ import uuid # For generating unique user IDs
 from typing import Any, Optional, Dict, List
 from llama_index.core.llms import ChatMessage, MessageRole
 import stui
-from agent import create_unified_agent, generate_suggested_prompts, initialize_settings as initialize_agent_settings, generate_llm_greeting
+from agent import create_unified_agent, generate_suggested_prompts, initialize_settings as initialize_agent_settings, generate_llm_greeting # StructuredChatResponse removed
 from dotenv import load_dotenv
+# import google.generativeai as genai # Removed, was for structuring model
+# from pydantic import ValidationError # Removed, was for parsing validation
 
 import user_data_manager # New import for user data persistence
 
@@ -96,7 +98,9 @@ def format_chat_history(streamlit_messages: list[dict[str, Any]]) -> list[ChatMe
     history = []
     for msg in streamlit_messages:
         role = MessageRole.USER if msg["role"] == "user" else MessageRole.ASSISTANT
-        history.append(ChatMessage(role=role, content=msg["content"]))
+        # Content is now expected to be a string for all messages after reversion
+        content = msg["content"]
+        history.append(ChatMessage(role=role, content=content))
     return history
 
 
@@ -104,30 +108,31 @@ def format_chat_history(streamlit_messages: list[dict[str, Any]]) -> list[ChatMe
 def get_agent_response(query: str, chat_history: list[ChatMessage]) -> str:
     """
     Get a response from the agent stored in the session state using the chat method,
-    explicitly passing the conversation history.
+    explicitly passing the conversation history. Returns a string response.
     """
     if AGENT_SESSION_KEY not in st.session_state or st.session_state[AGENT_SESSION_KEY] is None:
         return "Error: Agent not initialized. Please refresh the page."
 
-    agent = st.session_state[AGENT_SESSION_KEY]
+    agent_runner = st.session_state[AGENT_SESSION_KEY] # Renamed for clarity, was 'agent'
 
     try:
         current_temperature = st.session_state.get("llm_temperature", 0.7)
 
-        if hasattr(agent, '_agent_worker') and hasattr(agent._agent_worker, '_llm'):
-            actual_llm_instance = agent._agent_worker._llm
+        # Accessing the LLM instance within AgentRunner -> FunctionCallingAgentWorker -> LLM
+        if hasattr(agent_runner, '_agent_worker') and hasattr(agent_runner._agent_worker, '_llm'):
+            actual_llm_instance = agent_runner._agent_worker._llm
             if hasattr(actual_llm_instance, 'temperature'):
                 actual_llm_instance.temperature = current_temperature
-                print(f"Set LLM temperature to: {current_temperature}")
+                print(f"Set agent LLM temperature to: {current_temperature}")
             else:
-                print(f"Warning: LLM object of type {type(actual_llm_instance)} does not have a 'temperature' attribute.")
+                print(f"Warning: Agent LLM object of type {type(actual_llm_instance)} does not have a 'temperature' attribute.")
         else:
-            print("Warning: Could not access LLM object within the agent to set temperature. Agent or worker structure might have changed (_agent_worker or _agent_worker._llm not found).")
+            print("Warning: Could not access LLM object within the agent to set temperature.")
 
-        with st.spinner("ESI is thinking..."):
-            response = agent.chat(query, chat_history=chat_history) # Corrected: chat_history was formatted_history
+        with st.spinner("ESI is thinking..."): # Simplified spinner message
+            response_obj = agent_runner.chat(query, chat_history=chat_history)
 
-        response_text = response.response if hasattr(response, 'response') else str(response)
+        response_text = response_obj.response if hasattr(response_obj, 'response') else str(response_obj)
 
         print(f"Unified agent final response text for UI: \n{response_text[:500]}...")
         return response_text
@@ -135,6 +140,7 @@ def get_agent_response(query: str, chat_history: list[ChatMessage]) -> str:
     except Exception as e:
         print(f"Error getting unified agent response: {e}")
         return f"I apologize, but I encountered an error while processing your request. Please try again or rephrase your question. Technical details: {str(e)}"
+
 
 def handle_user_input(chat_input_value: str | None):
     """
@@ -169,8 +175,8 @@ def handle_user_input(chat_input_value: str | None):
             st.markdown(prompt_to_process)
 
         formatted_history = format_chat_history(st.session_state.messages)
-        response_text = get_agent_response(prompt_to_process, chat_history=formatted_history)
-        st.session_state.messages.append({"role": "assistant", "content": response_text})
+        response_text_string = get_agent_response(prompt_to_process, chat_history=formatted_history)
+        st.session_state.messages.append({"role": "assistant", "content": response_text_string})
 
         # Save the updated discussion after each turn
         _save_current_discussion()
@@ -189,7 +195,8 @@ def _create_new_discussion_session():
     st.session_state.current_discussion_title = new_discussion_meta["title"] # Standardized name
     
     # Initialize messages with a greeting
-    st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}] # Direct call to agent.py
+    greeting_text = generate_llm_greeting() # Direct call to agent.py
+    st.session_state.messages = [{"role": "assistant", "content": greeting_text}]
     st.session_state.should_generate_prompts = True # Set flag to generate new prompts
     st.session_state.editing_list_discussion_id = None # Exit any inline editing mode
 
@@ -207,7 +214,8 @@ def _load_discussion_session(discussion_id: str):
         st.session_state.messages = discussion_data.get("messages", [])
         
         if not st.session_state.messages: # If loaded discussion is empty, add greeting
-             st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}] # Direct call to agent.py
+             greeting_text = generate_llm_greeting() # Direct call to agent.py
+             st.session_state.messages = [{"role": "assistant", "content": greeting_text}]
         
         st.session_state.should_generate_prompts = True # Set flag to generate new prompts
         st.session_state.editing_list_discussion_id = None # Exit any inline editing mode
@@ -314,6 +322,7 @@ def _get_discussion_markdown(discussion_id: str) -> str:
     markdown_content = f"# Discussion: {discussion_data.get('title', 'Untitled Discussion')}\n\n"
     for message in discussion_data.get('messages', []):
         role = message["role"].capitalize()
+        # Content is now expected to be a direct string
         content = message["content"]
         markdown_content += f"## {role}\n{content}\n\n"
     return markdown_content
@@ -335,8 +344,8 @@ def handle_regeneration_request():
     # Case 1: Regenerating the initial greeting
     if len(st.session_state.messages) == 1:
         print("Regenerating initial greeting...")
-        new_greeting = generate_llm_greeting() # Direct call to agent.py
-        st.session_state.messages[0]['content'] = new_greeting
+        new_greeting_text = generate_llm_greeting() # Direct call to agent.py
+        st.session_state.messages[0]['content'] = new_greeting_text
         _save_current_discussion() # Save the regenerated greeting
         st.session_state.should_generate_prompts = True # Set flag to generate new prompts
         st.rerun()
@@ -354,8 +363,8 @@ def handle_regeneration_request():
     prompt_to_regenerate = st.session_state.messages[-1]['content']
     formatted_history_for_regen = format_chat_history(st.session_state.messages)
 
-    response_text = get_agent_response(prompt_to_regenerate, chat_history=formatted_history_for_regen)
-    st.session_state.messages.append({"role": "assistant", "content": response_text})
+    response_text_string = get_agent_response(prompt_to_regenerate, chat_history=formatted_history_for_regen)
+    st.session_state.messages.append({"role": "assistant", "content": response_text_string})
     _save_current_discussion() # Save the regenerated response
     st.session_state.should_generate_prompts = True # Set flag to generate new prompts
     st.rerun()

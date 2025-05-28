@@ -9,8 +9,15 @@ from llama_index.core.tools import FunctionTool
 from llama_index.core.llms import LLM
 from tools import get_all_tools
 from dotenv import load_dotenv
+# Removed: from google.generativeai import types as genai_types (no longer needed after removing thinking_config)
+
+# Imports for typing and Pydantic (List, Optional, BaseModel might be used by LlamaIndex or other parts)
+from typing import List, Optional
+from pydantic import BaseModel # Field removed as it was specific to StructuredChatResponse
 
 load_dotenv()
+
+# StructuredChatResponse Pydantic model has been removed.
 
 # Determine project root based on the script's location
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
@@ -33,7 +40,7 @@ def initialize_settings():
     # The temperature can be overridden later based on the slider
     Settings.llm = Gemini(model_name="models/gemini-2.5-flash-preview-05-20",
                           api_key=google_api_key,
-                          temperature=0.7) 
+                          temperature=0.7)
     print("LLM settings initialized.")
 
 
