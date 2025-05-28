@@ -433,76 +433,69 @@ def main():
     # This block runs only if user_id is stable AND discussion setup hasn't occurred yet.
     if st.session_state.user_id_initialized and not st.session_state.discussion_setup_done:
         print("User ID initialized. Performing one-time Agent and Discussion setup...")
-        
-        # Initialize LLM settings and Unified Agent
-        initialize_agent_settings() # From agent.py
-        if AGENT_SESSION_KEY not in st.session_state or st.session_state[AGENT_SESSION_KEY] is None:
-            st.session_state[AGENT_SESSION_KEY] = create_unified_agent() # From agent.py
-            print("Unified agent created and stored in session state.")
-        else:
-            print("Unified agent already exists in session state.")
 
-        _refresh_discussion_list() # Populate st.session_state.discussion_list
-
-        if not st.session_state.discussion_list: # No discussions at all for this user
-            print("No existing discussions found. Creating a new initial discussion.")
-            _create_new_discussion_session() # This calls generate_suggested_prompts directly
-        elif not st.session_state.current_discussion_id: # Has discussions, but none is set as current
-            print("Existing discussions found, loading the most recent one as current.")
-            if st.session_state.discussion_list: # Should be sorted by _refresh_discussion_list
-                 _load_discussion_session(st.session_state.discussion_list[0]['id']) 
-                 # _load_discussion_session sets should_generate_prompts=True
-            else: 
-                 print("Warning: Discussion list exists but is empty after refresh. Creating new discussion.")
-                 _create_new_discussion_session()
-        else:
-            # Current discussion ID already exists. We assume it's correctly loaded.
-            # If messages were empty for some reason, _load_discussion_session handles adding a greeting.
-            # And _load_discussion_session also sets should_generate_prompts = True.
-            # To be safe, and ensure prompts are generated if this is the first load after setup,
-            # we can call _load_discussion_session here. It should be idempotent.
-            print(f"Current discussion ID {st.session_state.current_discussion_id} already set. Ensuring it's fully loaded and prompts are triggered.")
-            _load_discussion_session(st.session_state.current_discussion_id)
-
-
-        st.session_state.discussion_setup_done = True
-        print("One-time Agent and Discussion setup complete. discussion_setup_done=True.")
-        # Important: Rerun to ensure the UI reflects the loaded/new discussion and suggested prompts properly.
-        # The _load_discussion_session or _create_new_discussion_session would have set messages
-        # and potentially set should_generate_prompts=True (or directly generated them in create_new).
-        # This rerun ensures the rest of the main() function (Block 3 and UI rendering)
-        # operates with the fully initialized state.
-        st.rerun() 
-
-    # Block 3: Fallback if no current discussion is active AFTER initial setup
-    # (e.g., user deleted the active discussion, or an error occurred loading previously)
-    # This should only execute if user_id is initialized AND one-time setup is done.
-    if st.session_state.user_id_initialized and \
-       st.session_state.discussion_setup_done and \
-       not st.session_state.current_discussion_id:
-        print("No current discussion active after initial setup (e.g., was deleted or failed to load). Creating a new one.")
-        _create_new_discussion_session() # This will set up a new discussion and messages
-        # _create_new_discussion_session now directly generates prompts.
-        st.rerun() # Rerun to reflect the new discussion state and its prompts.
 
     # --- Main Chat Interface Logic (Original structure follows) ---
 
-    # Handle regeneration request if flag is set
+        user_id = None
+        try:
+            user_id = cookies["user_id"] # Attempt to load from cookie
+            if not user_id: 
+                raise KeyError("User ID cookie empty")
+            print(f"Loaded user ID from cookie: {user_id}")
+            st.session_state.user_id = user_id
+            st.session_state.user_id_initialized = True # Set flag here for loaded user_id
+        except KeyError:
+            print("User ID cookie not found or empty, generating a new one.")
+            user_id = str(uuid.uuid4())
+            st.session_state.user_id = user_id # Assign to session state immediately
+            cookies["user_id"] = user_id # Set it in the cookie
+            st.session_state.user_id_initialized = True # Set flag immediately before rerun
+            cookies.save() # Save the cookie - this triggers a rerun
+            print(f"Generated new user ID and set cookie: {user_id}")
+        except Exception as e: # Catch other potential cookie errors
+            st.error(f"An unexpected error occurred with cookies: {e}. Please try clearing your browser cookies for this site.")
+            if 'user_id_temp' not in st.session_state: # Fallback to a temporary session ID
+                st.session_state.user_id_temp = str(uuid.uuid4())
+            user_id = st.session_state.user_id_temp
+            st.session_state.user_id = user_id # Assign to session state immediately
+            st.session_state.user_id_initialized = True # Set flag for fallback as well
+            print(f"Fell back to temporary user ID: {user_id}")
+            # No rerun needed here, as it's a fallback, not a cookie save.
+
+        # Populate discussion list for the first time, only if user_id is now set
+        if st.session_state.user_id:
+            st.session_state.discussion_list = sorted(
+                user_data_manager.list_discussions(st.session_state.user_id),
+                key=lambda x: x.get('timestamp', ''), reverse=True
+            )
+            print(f"Initial discussion list populated with {len(st.session_state.discussion_list)} items.")
+
+        # Create initial discussion if none exists for the user
+        if not st.session_state.current_discussion_id:
+            _create_new_discussion_session() # This sets should_generate_prompts = True
+            # No st.rerun() here. Let the natural rerun handle it.
+
+    # --- Ensure a current discussion is always active after initial setup ---
+    # This block handles cases where the current discussion might be unset *after* initial setup,
+    # e.g., if the user deletes the currently active discussion.
+    # It should NOT trigger a new discussion on every rerun if one is already active.
+    # The `user_id_initialized` check ensures this only runs after the user ID is stable.
+    if not st.session_state.current_discussion_id and st.session_state.user_id_initialized:
+        _create_new_discussion_session()
+        # Removed st.rerun() here. The natural rerun will update the UI.
     if st.session_state.get("do_regenerate", False):
         handle_regeneration_request() # This function itself calls st.rerun()
 
-    # Generate suggested prompts if the flag is set (e.g., after a user message, or by _load_discussion_session)
-    # This block is now more controlled due to earlier setup.
+
+    # Generate suggested prompts only if the flag is set AND (they are missing or need refresh)
     if st.session_state.should_generate_prompts:
-        if not st.session_state.get("suggested_prompts") or not st.session_state.messages:
-            # Only generate if prompts are missing, or if messages list is empty (should not happen if greeting is always there)
-            # The main trigger for regeneration of prompts after user input is in handle_user_input.
-            # _load_discussion_session and _create_new_discussion_session also manage this.
-            print("Generating suggested prompts based on current messages (should_generate_prompts=True)...")
+        if not st.session_state.get("suggested_prompts"): # Check if list is empty or None
+            print("Generating suggested prompts using LLM (triggered by should_generate_prompts flag and no existing prompts)...")
             st.session_state.suggested_prompts = generate_suggested_prompts(st.session_state.messages)
         else:
-            print("Suggested prompts already exist or messages are empty; skipping generation in main loop's check.")
-        st.session_state.should_generate_prompts = False # Reset the flag
+            print("Suggested prompts already exist, flag was true but skipping regeneration unless context change logic is added.")
+        st.session_state.should_generate_prompts = False # Reset the flag in either case
 
     # Create the rest of the interface using stui (displays chat history, sidebar, etc.)
     # This needs a valid discussion (messages, title) to be set up.
