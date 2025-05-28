@@ -89,6 +89,9 @@ def init_session_state_for_app():
     if "user_id_initialized" not in st.session_state: # New flag to control initial setup
         st.session_state.user_id_initialized = False
 
+    if "discussion_setup_done" not in st.session_state: # New flag for one-time discussion setup
+        st.session_state.discussion_setup_done = False
+
 
 # --- Helper Function for History Formatting ---
 def format_chat_history(streamlit_messages: list[dict[str, Any]]) -> list[ChatMessage]:
@@ -395,20 +398,45 @@ st.session_state._get_discussion_markdown = _get_discussion_markdown # Expose ne
 
 def main():
     """Main function to run the Streamlit app."""
-    init_session_state_for_app()
+    init_session_state_for_app() # Initializes 'user_id_initialized = False', 'discussion_setup_done = False'
 
-    # --- Initialize LLM Settings (cached in agent.py) ---
-    initialize_agent_settings()
+    # This check for cookies.ready() is from the original code and should be kept.
+    # It uses st.stop() correctly for streamlit_cookies_manager.
+    if not cookies.ready():
+        st.info("Loading user session...")
+        st.stop()
 
-    # --- Initialize Unified Agent (cached in agent.py) ---
-    if AGENT_SESSION_KEY not in st.session_state:
-        st.session_state[AGENT_SESSION_KEY] = create_unified_agent()
-
-    # --- User Identification and Initial Discussion Load (Cookie-based) ---
-    # This block should only run once per session to set up user_id and initial discussion
+    # Block 1: User ID Initialization
+    # Goal: Ensure st.session_state.user_id is set and st.session_state.user_id_initialized is True.
+    # This block should run until user_id_initialized is True.
     if not st.session_state.user_id_initialized:
-        print("Initial user/discussion setup running...")
-        
+        print("Attempting to initialize user_id...")
+        user_id_from_cookie = cookies.get("user_id")
+
+        if user_id_from_cookie:
+            st.session_state.user_id = user_id_from_cookie
+            st.session_state.user_id_initialized = True
+            print(f"User ID {user_id_from_cookie} loaded from cookie. user_id_initialized=True.")
+            # No st.rerun() needed here, proceed to Block 2 if conditions met
+        else:
+            new_user_id = str(uuid.uuid4())
+            st.session_state.user_id = new_user_id
+            # Set initialized flag BEFORE save, to ensure it's set if the rerun reads it.
+            st.session_state.user_id_initialized = True 
+            cookies["user_id"] = new_user_id # Set cookie
+            print(f"New user ID {new_user_id} generated. user_id_initialized=True. Saving to cookie...")
+            cookies.save() # This triggers a rerun by the cookie manager
+            print("Cookie saved. Halting current script execution for Streamlit rerun.")
+            st.stop() # Halt current run, let the save-induced rerun take over.
+    
+    # Block 2: Agent and One-Time Discussion Setup
+    # This block runs only if user_id is stable AND discussion setup hasn't occurred yet.
+    if st.session_state.user_id_initialized and not st.session_state.discussion_setup_done:
+        print("User ID initialized. Performing one-time Agent and Discussion setup...")
+
+
+    # --- Main Chat Interface Logic (Original structure follows) ---
+
         user_id = None
         try:
             user_id = cookies["user_id"] # Attempt to load from cookie
@@ -456,11 +484,9 @@ def main():
     if not st.session_state.current_discussion_id and st.session_state.user_id_initialized:
         _create_new_discussion_session()
         # Removed st.rerun() here. The natural rerun will update the UI.
-
-    # --- Main Chat Interface ---
-    # Handle regeneration request if flag is set
     if st.session_state.get("do_regenerate", False):
-        handle_regeneration_request()
+        handle_regeneration_request() # This function itself calls st.rerun()
+
 
     # Generate suggested prompts only if the flag is set AND (they are missing or need refresh)
     if st.session_state.should_generate_prompts:
@@ -472,16 +498,31 @@ def main():
         st.session_state.should_generate_prompts = False # Reset the flag in either case
 
     # Create the rest of the interface using stui (displays chat history, sidebar, etc.)
-    stui.create_interface(
-        DOWNLOAD_MARKER=DOWNLOAD_MARKER,
-        RAG_SOURCE_MARKER_PREFIX=RAG_SOURCE_MARKER_PREFIX
-    )
+    # This needs a valid discussion (messages, title) to be set up.
+    if st.session_state.current_discussion_id and st.session_state.user_id_initialized and st.session_state.discussion_setup_done:
+        stui.create_interface(
+            DOWNLOAD_MARKER=DOWNLOAD_MARKER,
+            RAG_SOURCE_MARKER_PREFIX=RAG_SOURCE_MARKER_PREFIX
+        )
 
-    # Render the chat input box at the bottom, capture its value
-    chat_input_value = st.chat_input("Ask me about dissertations, research methods, academic writing, etc.")
+        # Render the chat input box at the bottom, capture its value
+        chat_input_value = st.chat_input("Ask me about dissertations, research methods, academic writing, etc.")
 
-    # Handle user input (either from chat box or a clicked suggested prompt button)
-    handle_user_input(chat_input_value)
+        # Handle user input (either from chat box or a clicked suggested prompt button)
+        handle_user_input(chat_input_value) # This function calls st.rerun() after processing
+    elif not st.session_state.user_id_initialized:
+        st.warning("User session not yet initialized. Please wait or refresh.")
+    elif not st.session_state.discussion_setup_done:
+        st.info("Setting up your discussion environment. Please wait...")
+        # Potentially add a st.rerun() here if it seems stuck, but the logic above should handle it.
+    else: # Should be caught by Block 3, but as a fallback:
+        st.error("Something went wrong with discussion setup. Please try refreshing the page.")
+        print("Error state: user_id_initialized={}, discussion_setup_done={}, current_discussion_id={}".format(
+            st.session_state.user_id_initialized, 
+            st.session_state.discussion_setup_done, 
+            st.session_state.current_discussion_id
+        ))
+
 
     # Display a warning if Google API Key is missing
     if not os.getenv("GOOGLE_API_KEY"):
