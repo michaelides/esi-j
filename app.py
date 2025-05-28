@@ -130,7 +130,8 @@ def get_agent_response(query: str, chat_history: list[ChatMessage]) -> str:
             print("Warning: Could not access LLM object within the agent to set temperature.")
 
         with st.spinner("ESI is thinking..."): # Simplified spinner message
-            response_obj = agent_runner.chat(query, chat_history=formatted_history)
+            response_obj = agent_runner.chat(query, chat_history=chat_history)
+                                                                 # ^ Changed from formatted_history
 
         response_text = response_obj.response if hasattr(response_obj, 'response') else str(response_obj)
 
