@@ -23,24 +23,21 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
         with st.chat_message(message["role"]):
             content = message["content"]
             
-            text_to_display = ""
+            # Initialize text_to_display with the full content of the message
+            # For assistant messages, content is now expected to be a direct string.
+            # For user messages, it's also a string.
+            text_to_display = str(content) 
+            
             rag_sources_data = []
             code_download_filename = None
-            code_download_filepath_relative = None # Ensure this is defined for assistant and user branches
+            code_download_filepath_relative = None 
             code_is_image = False
-            reasoning_steps = None
+            # reasoning_steps is removed as it's no longer part of structured response
 
             if message["role"] == "assistant":
-                if isinstance(content, dict):
-                    actual_answer_text = content.get("answer", "")
-                    reasoning_steps = content.get("reasoning")
-                else:  # Fallback for old string format or unexpected content
-                    actual_answer_text = str(content)
-                    reasoning_steps = None
-                
-                text_to_display = actual_answer_text
-
                 # --- 1. Extract RAG sources ---
+                # text_to_display is already initialized with the assistant's string content
+
                 rag_source_pattern = re.compile(rf"{re.escape(RAG_SOURCE_MARKER_PREFIX)}\s*({{.*?}})\s*(?:\n|$)", re.DOTALL)
                 matches = list(rag_source_pattern.finditer(text_to_display))
                 extracted_rag_sources = []
@@ -72,18 +69,19 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                         text_to_display += f"\n\n*(Warning: The file '{extracted_filename}' mentioned for download could not be found.)*"
             
             elif message["role"] == "user":
-                text_to_display = str(content) # User content is simpler
-
+                pass # No special processing needed here for user role beyond what's done initially
             # Apply strip to the final text to display, after all extractions
             text_to_display = text_to_display.strip()
 
             # --- 3. Display main text content ---
-            if text_to_display: # Only display if there's something left after stripping markers
+            # For user messages, this will display their direct input.
+            # For assistant messages, this displays the text after marker removal.
+            if text_to_display: 
                 st.markdown(text_to_display)
 
             # --- 4. Display RAG sources (PDFs and Web Links) - Deduplicated ---
             # This section only applies if role was assistant and rag_sources_data was populated
-            if message["role"] == "assistant" and rag_sources_data:
+            if message["role"] == "assistant" and rag_sources_data: # rag_sources_data is populated only for assistant
                 displayed_rag_identifiers = set()
                 any_rag_sources_displayed = False
                 for rag_idx, rag_data in enumerate(rag_sources_data):
@@ -152,13 +150,6 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                             st.error(f"Error creating download button for {code_download_filename}: {e}")
                     # else: The warning for missing file is handled during marker extraction.
 
-            # --- 6. New: Display reasoning if available (for assistant messages) ---
-            if message["role"] == "assistant" and reasoning_steps and isinstance(reasoning_steps, list) and len(reasoning_steps) > 0:
-                with st.expander("Show Reasoning"):
-                    for step in reasoning_steps:
-                        st.markdown(f"- {step}")
-
-            # --- 7. Add regenerate button for the last assistant message ---
             if message["role"] == "assistant" and msg_idx == len(st.session_state.messages) - 1:
                 can_regenerate = False
                 if len(st.session_state.messages) == 1: # If it's the first message (initial greeting)

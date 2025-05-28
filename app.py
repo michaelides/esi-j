@@ -5,10 +5,9 @@ import uuid # For generating unique user IDs
 from typing import Any, Optional, Dict, List
 from llama_index.core.llms import ChatMessage, MessageRole
 import stui
-from agent import create_unified_agent, generate_suggested_prompts, initialize_settings as initialize_agent_settings, generate_llm_greeting, StructuredChatResponse # Added StructuredChatResponse
+
+from agent import create_unified_agent, generate_suggested_prompts, initialize_settings as initialize_agent_settings, generate_llm_greeting # StructuredChatResponse removed
 from dotenv import load_dotenv
-import google.generativeai as genai # Added for structuring model
-from pydantic import ValidationError # Added for parsing validation
 
 import user_data_manager # New import for user data persistence
 
@@ -98,28 +97,18 @@ def format_chat_history(streamlit_messages: list[dict[str, Any]]) -> list[ChatMe
     history = []
     for msg in streamlit_messages:
         role = MessageRole.USER if msg["role"] == "user" else MessageRole.ASSISTANT
-        
-        content_for_llm_history = ""
-        if msg["role"] == "user":
-            content_for_llm_history = msg["content"]
-        elif msg["role"] == "assistant":
-            if isinstance(msg["content"], dict) and "answer" in msg["content"]:
-                content_for_llm_history = msg["content"]["answer"]
-            elif isinstance(msg["content"], str): # Fallback for old format or simple string content
-                content_for_llm_history = msg["content"]
-            else: # Should not happen with proper saving
-                print(f"Warning: Assistant message content is in unexpected format: {msg['content']}")
-                content_for_llm_history = str(msg["content"])
-        
-        history.append(ChatMessage(role=role, content=content_for_llm_history))
+        # Content is now expected to be a string for all messages after reversion
+        content = msg["content"]
+        history.append(ChatMessage(role=role, content=content))
+
     return history
 
 
 # --- Agent Interaction ---
 def get_agent_response(query: str, chat_history: list[ChatMessage]) -> StructuredChatResponse:
     """
-    Get a response from the agent, then reformat it into a StructuredChatResponse
-    using a separate Gemini model call.
+    Get a response from the agent stored in the session state using the chat method,
+    explicitly passing the conversation history. Returns a string response.
     """
     if AGENT_SESSION_KEY not in st.session_state or st.session_state[AGENT_SESSION_KEY] is None:
         return StructuredChatResponse(answer="Error: Agent not initialized. Please refresh the page.", reasoning=[])
@@ -141,12 +130,14 @@ def get_agent_response(query: str, chat_history: list[ChatMessage]) -> Structure
         else:
             print("Warning: Could not access LLM object within the agent to set temperature.")
 
-        with st.spinner("ESI (Agent) is thinking..."):
-            # Ensure agent is AgentRunner and has chat method
+        with st.spinner("ESI is thinking..."): # Simplified spinner message
             response_obj = agent_runner.chat(query, chat_history=chat_history)
 
-        original_response_text = response_obj.response if hasattr(response_obj, 'response') else str(response_obj)
-        print(f"Unified agent raw response text: \n{original_response_text[:500]}...")
+        response_text = response_obj.response if hasattr(response_obj, 'response') else str(response_obj)
+
+        print(f"Unified agent final response text for UI: \n{response_text[:500]}...")
+        return response_text
+
 
     except Exception as e:
         print(f"Error getting unified agent response: {e}")
@@ -210,6 +201,7 @@ Reformat this response into a JSON object with two fields: "answer" and "reasoni
         return StructuredChatResponse(answer=original_response_text, reasoning=[f"Error during structuring: {str(e)}"])
 
 
+
 def handle_user_input(chat_input_value: str | None):
     """
     Process user input (either from chat box or suggested prompt)
@@ -243,8 +235,9 @@ def handle_user_input(chat_input_value: str | None):
             st.markdown(prompt_to_process)
 
         formatted_history = format_chat_history(st.session_state.messages)
-        structured_response_obj = get_agent_response(prompt_to_process, chat_history=formatted_history)
-        st.session_state.messages.append({"role": "assistant", "content": structured_response_obj.model_dump()})
+        response_text_string = get_agent_response(prompt_to_process, chat_history=formatted_history)
+        st.session_state.messages.append({"role": "assistant", "content": response_text_string})
+
 
         # Save the updated discussion after each turn
         _save_current_discussion()
@@ -264,7 +257,8 @@ def _create_new_discussion_session():
     
     # Initialize messages with a greeting
     greeting_text = generate_llm_greeting() # Direct call to agent.py
-    st.session_state.messages = [{"role": "assistant", "content": {"answer": greeting_text, "reasoning": ["Initial greeting."]}}]
+    st.session_state.messages = [{"role": "assistant", "content": greeting_text}]
+
     st.session_state.should_generate_prompts = True # Set flag to generate new prompts
     st.session_state.editing_list_discussion_id = None # Exit any inline editing mode
 
@@ -283,7 +277,8 @@ def _load_discussion_session(discussion_id: str):
         
         if not st.session_state.messages: # If loaded discussion is empty, add greeting
              greeting_text = generate_llm_greeting() # Direct call to agent.py
-             st.session_state.messages = [{"role": "assistant", "content": {"answer": greeting_text, "reasoning": ["Initial greeting for empty discussion."]}}]
+             st.session_state.messages = [{"role": "assistant", "content": greeting_text}]
+
         
         st.session_state.should_generate_prompts = True # Set flag to generate new prompts
         st.session_state.editing_list_discussion_id = None # Exit any inline editing mode
@@ -390,21 +385,9 @@ def _get_discussion_markdown(discussion_id: str) -> str:
     markdown_content = f"# Discussion: {discussion_data.get('title', 'Untitled Discussion')}\n\n"
     for message in discussion_data.get('messages', []):
         role = message["role"].capitalize()
-        content_to_display = ""
-        if message["role"] == "user":
-            content_to_display = message["content"]
-        elif message["role"] == "assistant":
-            if isinstance(message["content"], dict) and "answer" in message["content"]:
-                content_to_display = message["content"]["answer"]
-                 # Optionally, append reasoning for more detailed markdown:
-                # if "reasoning" in message["content"] and message["content"]["reasoning"]:
-                #    content_to_display += f"\n\n_Reasoning: {'; '.join(message['content']['reasoning'])}_"
-            elif isinstance(message["content"], str): # Fallback
-                content_to_display = message["content"]
-            else:
-                content_to_display = str(message["content"])
+        content = message["content"]
+        markdown_content += f"## {role}\n{content}\n\n"
 
-        markdown_content += f"## {role}\n{content_to_display}\n\n"
     return markdown_content
 
 
@@ -425,7 +408,8 @@ def handle_regeneration_request():
     if len(st.session_state.messages) == 1:
         print("Regenerating initial greeting...")
         new_greeting_text = generate_llm_greeting() # Direct call to agent.py
-        st.session_state.messages[0]['content'] = {"answer": new_greeting_text, "reasoning": ["Initial greeting regenerated."]}
+        st.session_state.messages[0]['content'] = new_greeting_text
+
         _save_current_discussion() # Save the regenerated greeting
         st.session_state.should_generate_prompts = True # Set flag to generate new prompts
         st.rerun()
@@ -443,8 +427,8 @@ def handle_regeneration_request():
     prompt_to_regenerate = st.session_state.messages[-1]['content']
     formatted_history_for_regen = format_chat_history(st.session_state.messages)
 
-    structured_response_obj = get_agent_response(prompt_to_regenerate, chat_history=formatted_history_for_regen)
-    st.session_state.messages.append({"role": "assistant", "content": structured_response_obj.model_dump()})
+    response_text_string = get_agent_response(prompt_to_regenerate, chat_history=formatted_history_for_regen)
+    st.session_state.messages.append({"role": "assistant", "content": response_text_string})
     _save_current_discussion() # Save the regenerated response
     st.session_state.should_generate_prompts = True # Set flag to generate new prompts
     st.rerun()
