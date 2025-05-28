@@ -210,7 +210,7 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                                     st.session_state._load_discussion_session(discussion['id'])
                                 # If current, clicking the title button does nothing directly,
                                 # editing is handled via the popover.
-                                st.rerun() # Rerun to update UI state
+                                # Removed st.rerun() here. Rely on natural rerun after button click.
 
                     with col_options:
                         # Popover for options - Changed icon to vertical ellipsis
@@ -221,7 +221,7 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                             # Option to edit title
                             if st.button("✏️ Edit Title", key=f"edit_from_popover_{discussion['id']}", use_container_width=True):
                                 st.session_state.editing_list_discussion_id = discussion['id']
-                                st.rerun()
+                                # Removed st.rerun() here. Rely on natural rerun after button click.
                             
                             # Option to download
                             st.download_button(
@@ -236,11 +236,11 @@ def create_interface(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                             # Option to delete
                             if st.button("♻ Delete", key=f"delete_from_popover_{discussion['id']}", use_container_width=True):
                                 st.session_state._delete_current_discussion(discussion['id'])
-                                # st.rerun() is called by _delete_current_discussion
+                                # Removed st.rerun() here. Rely on natural rerun after button click.
             # New Discussion button
             if st.button("➕ New Discussion", use_container_width=True, key="new_discussion_button"):
                 st.session_state._create_new_discussion_session()
-                # st.rerun() is called by _create_new_discussion_session
+                # Removed st.rerun() here. Rely on natural rerun after button click.
             # st.divider()
 
         
