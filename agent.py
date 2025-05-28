@@ -21,22 +21,47 @@ PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 SUGGESTED_PROMPT_COUNT = 4
 
 # --- Global Settings ---
-@st.cache_resource # Cache the LLM and embedding model initialization
+# @st.cache_resource # Cache the LLM and embedding model initialization - TEMPORARILY REMOVED FOR DIAGNOSIS
 def initialize_settings():
     """Initializes LlamaIndex settings with Gemini LLM and Embedding model."""
+    print("Attempting to initialize settings...")
     google_api_key = os.getenv("GOOGLE_API_KEY")
+    print(f"  GOOGLE_API_KEY value: {google_api_key}")
     if not google_api_key:
-        raise ValueError("GOOGLE_API_KEY not found in environment variables.")
-
+        # raise ValueError("GOOGLE_API_KEY not found in environment variables.") # Keep running for now
+        print("  WARNING: GOOGLE_API_KEY not found in environment variables!")
+        # Attempt to set a placeholder or handle gracefully if possible,
+        # For now, let it proceed to see if Gemini init handles it with its own error.
+    
     # Use Google Generative AI Embeddings
-    Settings.embed_model = GoogleGenAIEmbedding(model_name="models/text-embedding-004", api_key=google_api_key)
+    try:
+        Settings.embed_model = GoogleGenAIEmbedding(model_name="models/text-embedding-004", api_key=google_api_key)
+        print(f"  Settings.embed_model initialized: {type(Settings.embed_model)}")
+    except Exception as e:
+        print(f"  Error initializing Settings.embed_model: {e}")
+
     # Use a potentially more stable model name and set a default temperature
     # The temperature can be overridden later based on the slider
-    Settings.llm = Gemini(model_name="models/gemini-2.5-flash-preview-05-20",
-                          api_key=google_api_key,
+    try:
+        Settings.llm = Gemini(model_name="models/gemini-2.5-flash-preview-05-20", # Ensuring this is the problem model
+                              api_key=google_api_key,
+                              temperature=0.7) # Default temperature
+        print(f"  Settings.llm initialized: {type(Settings.llm)}")
+        if hasattr(Settings.llm, 'model_name'):
+            print(f"  Settings.llm.model_name: {Settings.llm.model_name}")
+        elif hasattr(Settings.llm, 'model'): # Some LLM client libs use 'model'
+             print(f"  Settings.llm.model: {Settings.llm.model}")
+        else:
+            print("  Settings.llm does not have a 'model_name' or 'model' attribute to display.")
 
-                          temperature=0.7)
-    print("LLM settings initialized.")
+    except Exception as e:
+        print(f"  Error initializing Settings.llm (Gemini): {e}")
+        # Fallback to a default LLM or raise error if critical
+        # For diagnosis, we'll print the error and let it potentially fail downstream
+        # if Settings.llm is not correctly set.
+        Settings.llm = None # Explicitly set to None if init fails
+
+    print("LLM settings initialization attempt complete.")
 
 # --- Greeting Generation ---
 def generate_llm_greeting() -> str:
