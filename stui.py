@@ -37,6 +37,7 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
             if message["role"] == "assistant":
                 # --- 1. Extract RAG sources ---
                 # text_to_display is already initialized with the assistant's string content
+
                 rag_source_pattern = re.compile(rf"{re.escape(RAG_SOURCE_MARKER_PREFIX)}\s*({{.*?}})\s*(?:\n|$)", re.DOTALL)
                 matches = list(rag_source_pattern.finditer(text_to_display))
                 extracted_rag_sources = []
@@ -68,9 +69,7 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                         text_to_display += f"\n\n*(Warning: The file '{extracted_filename}' mentioned for download could not be found.)*"
             
             elif message["role"] == "user":
-                # text_to_display is already initialized with str(content) from above
                 pass # No special processing needed here for user role beyond what's done initially
-
             # Apply strip to the final text to display, after all extractions
             text_to_display = text_to_display.strip()
 
@@ -151,10 +150,6 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
                             st.error(f"Error creating download button for {code_download_filename}: {e}")
                     # else: The warning for missing file is handled during marker extraction.
 
-            # --- 6. Reasoning expander removed ---
-
-            # --- 7. Add regenerate button for the last assistant message ---
-            # This logic remains the same.
             if message["role"] == "assistant" and msg_idx == len(st.session_state.messages) - 1:
                 can_regenerate = False
                 if len(st.session_state.messages) == 1: # If it's the first message (initial greeting)
