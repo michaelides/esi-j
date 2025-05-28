@@ -183,10 +183,8 @@ def handle_user_input(chat_input_value: str | None):
         st.session_state.messages.append({"role": "assistant", "content": response_text_string})
 
 
-        # Save the updated discussion after each turn
         _save_current_discussion()
         st.session_state.should_generate_prompts = True # Set flag to generate new prompts
-        st.rerun()
 
 # --- Discussion Management Functions ---
 def _create_new_discussion_session():
