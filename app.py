@@ -200,7 +200,13 @@ def _create_new_discussion_session():
     greeting_text = generate_llm_greeting() # Direct call to agent.py
     st.session_state.messages = [{"role": "assistant", "content": greeting_text}]
 
-    st.session_state.should_generate_prompts = True # Set flag to generate new prompts
+    # Directly generate prompts:
+    print("Generating initial suggested prompts directly within _create_new_discussion_session...")
+    # Ensure generate_suggested_prompts is available/imported if not already.
+    # It is imported from agent.py at the top of app.py
+    st.session_state.suggested_prompts = generate_suggested_prompts(st.session_state.messages)
+    st.session_state.should_generate_prompts = False # Reset flag immediately
+
     st.session_state.editing_list_discussion_id = None # Exit any inline editing mode
 
     _refresh_discussion_list()
@@ -419,7 +425,6 @@ def main():
             st.session_state.user_id_initialized = True # Set flag immediately before rerun
             cookies.save() # Save the cookie - this triggers a rerun
             print(f"Generated new user ID and set cookie: {user_id}")
-            st.rerun() # Explicitly rerun after setting cookie to ensure state is consistent
         except Exception as e: # Catch other potential cookie errors
             st.error(f"An unexpected error occurred with cookies: {e}. Please try clearing your browser cookies for this site.")
             if 'user_id_temp' not in st.session_state: # Fallback to a temporary session ID
@@ -457,11 +462,14 @@ def main():
     if st.session_state.get("do_regenerate", False):
         handle_regeneration_request()
 
-    # Generate suggested prompts only if the flag is set
+    # Generate suggested prompts only if the flag is set AND (they are missing or need refresh)
     if st.session_state.should_generate_prompts:
-        print("Generating suggested prompts using LLM (triggered by should_generate_prompts flag)...")
-        st.session_state.suggested_prompts = generate_suggested_prompts(st.session_state.messages)
-        st.session_state.should_generate_prompts = False # Reset the flag
+        if not st.session_state.get("suggested_prompts"): # Check if list is empty or None
+            print("Generating suggested prompts using LLM (triggered by should_generate_prompts flag and no existing prompts)...")
+            st.session_state.suggested_prompts = generate_suggested_prompts(st.session_state.messages)
+        else:
+            print("Suggested prompts already exist, flag was true but skipping regeneration unless context change logic is added.")
+        st.session_state.should_generate_prompts = False # Reset the flag in either case
 
     # Create the rest of the interface using stui (displays chat history, sidebar, etc.)
     stui.create_interface(
