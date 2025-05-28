@@ -409,18 +409,16 @@ def main():
             if not user_id: 
                 raise KeyError("User ID cookie empty")
             print(f"Loaded user ID from cookie: {user_id}")
-            # If user_id is successfully loaded, set the flag and proceed
             st.session_state.user_id = user_id
+            st.session_state.user_id_initialized = True # Set flag here for loaded user_id
         except KeyError:
             print("User ID cookie not found or empty, generating a new one.")
             user_id = str(uuid.uuid4())
             st.session_state.user_id = user_id # Assign to session state immediately
             cookies["user_id"] = user_id # Set it in the cookie
+            st.session_state.user_id_initialized = True # Set flag immediately before rerun
             cookies.save() # Save the cookie - this triggers a rerun
             print(f"Generated new user ID and set cookie: {user_id}")
-            # After cookies.save(), the script will rerun from the top.
-            # The next run will find user_id_initialized as True and skip this block.
-            st.session_state.user_id_initialized = True # Set flag immediately before rerun
             st.rerun() # Explicitly rerun after setting cookie to ensure state is consistent
         except Exception as e: # Catch other potential cookie errors
             st.error(f"An unexpected error occurred with cookies: {e}. Please try clearing your browser cookies for this site.")
@@ -428,28 +426,31 @@ def main():
                 st.session_state.user_id_temp = str(uuid.uuid4())
             user_id = st.session_state.user_id_temp
             st.session_state.user_id = user_id # Assign to session state immediately
+            st.session_state.user_id_initialized = True # Set flag for fallback as well
             print(f"Fell back to temporary user ID: {user_id}")
             # No rerun needed here, as it's a fallback, not a cookie save.
 
-        # This part should only run if user_id_initialized is True (either from loading or generating)
-        # and if it's the first time populating the discussion list for this session.
-        # This block is now outside the try-except, but still within the `if not user_id_initialized`
-        # to ensure it runs only once after user_id is established.
-        st.session_state.user_id_initialized = True # Ensure this is set after user_id is determined
-        if st.session_state.user_id: # Ensure user_id is set before listing discussions
+        # Populate discussion list for the first time, only if user_id is now set
+        if st.session_state.user_id:
             st.session_state.discussion_list = sorted(
                 user_data_manager.list_discussions(st.session_state.user_id),
                 key=lambda x: x.get('timestamp', ''), reverse=True
             )
             print(f"Initial discussion list populated with {len(st.session_state.discussion_list)} items.")
 
+        # Create initial discussion if none exists for the user
+        if not st.session_state.current_discussion_id:
+            _create_new_discussion_session() # This sets should_generate_prompts = True
+            # No st.rerun() here. Let the natural rerun handle it.
+
     # --- Ensure a current discussion is always active after initial setup ---
-    # This handles cases where the last discussion was deleted, or initial load failed.
-    # This check is still important for subsequent runs within the same session
-    # if a discussion is deleted and no new one is explicitly created.
-    if not st.session_state.current_discussion_id:
-        _create_new_discussion_session() # This function no longer calls st.rerun()
-        st.rerun() # Explicitly rerun here to update the UI with the new discussion
+    # This block handles cases where the current discussion might be unset *after* initial setup,
+    # e.g., if the user deletes the currently active discussion.
+    # It should NOT trigger a new discussion on every rerun if one is already active.
+    # The `user_id_initialized` check ensures this only runs after the user ID is stable.
+    if not st.session_state.current_discussion_id and st.session_state.user_id_initialized:
+        _create_new_discussion_session()
+        # Removed st.rerun() here. The natural rerun will update the UI.
 
     # --- Main Chat Interface ---
     # Handle regeneration request if flag is set
