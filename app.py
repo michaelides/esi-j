@@ -434,9 +434,6 @@ def main():
         )
         print(f"Initial discussion list populated with {len(st.session_state.discussion_list)} items.")
 
-        # Always create a new discussion when the app is first accessed in a session
-        _create_new_discussion_session() # This function will also call st.rerun()
-
     # --- Ensure a current discussion is always active after initial setup ---
     # This handles cases where the last discussion was deleted, or initial load failed.
     # This check is still important for subsequent runs within the same session
