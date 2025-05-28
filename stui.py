@@ -23,159 +23,152 @@ def display_chat(DOWNLOAD_MARKER: str, RAG_SOURCE_MARKER_PREFIX: str):
         with st.chat_message(message["role"]):
             content = message["content"]
             
-            # Initialize text_to_display with the full content of the message
-            text_to_display = content
+            text_to_display = ""
             rag_sources_data = []
             code_download_filename = None
-            code_download_filepath_relative = None
+            code_download_filepath_relative = None # Ensure this is defined for assistant and user branches
             code_is_image = False
+            reasoning_steps = None
 
             if message["role"] == "assistant":
+                if isinstance(content, dict):
+                    actual_answer_text = content.get("answer", "")
+                    reasoning_steps = content.get("reasoning")
+                else:  # Fallback for old string format or unexpected content
+                    actual_answer_text = str(content)
+                    reasoning_steps = None
+                
+                text_to_display = actual_answer_text
+
                 # --- 1. Extract RAG sources ---
                 rag_source_pattern = re.compile(rf"{re.escape(RAG_SOURCE_MARKER_PREFIX)}\s*({{.*?}})\s*(?:\n|$)", re.DOTALL)
-                
-                matches = list(rag_source_pattern.finditer(text_to_display)) # Search in current text_to_display
-
+                matches = list(rag_source_pattern.finditer(text_to_display))
                 extracted_rag_sources = []
-                # Iterate in reverse to avoid issues with index shifts when removing parts
                 for match in reversed(matches):
                     json_str = match.group(1)
                     try:
                         rag_data = json.loads(json_str)
                         extracted_rag_sources.append(rag_data)
-                        # print(f"Extracted RAG source: {rag_data.get('name') or rag_data.get('title')}") # Removed verbose print
                     except json.JSONDecodeError as e:
                         print(f"Warning: Could not decode RAG source JSON: '{json_str}'. Error: {e}")
-                    
-                    # Remove the marker and its content from text_to_display
                     text_to_display = text_to_display[:match.start()] + text_to_display[match.end():]
-                
                 rag_sources_data = list(reversed(extracted_rag_sources))
                 
                 # --- 2. Extract Code Interpreter download marker ---
-                # Search in the potentially modified text_to_display
                 code_marker_match = re.search(rf"^{re.escape(DOWNLOAD_MARKER)}(.*)$", text_to_display, re.MULTILINE | re.IGNORECASE)
                 if code_marker_match:
                     extracted_filename = code_marker_match.group(1).strip()
-                    # Remove the marker from text_to_display
                     text_to_display = text_to_display[:code_marker_match.start()] + text_to_display[code_marker_match.end():]
-                    
-                    # print(f"Found code download marker. Filename: {extracted_filename}") # Removed verbose print
                     code_download_filename = extracted_filename
                     code_download_filepath_relative = os.path.join(CODE_WORKSPACE_RELATIVE, extracted_filename)
-
                     code_download_filepath_absolute = os.path.join(PROJECT_ROOT, code_download_filepath_relative)
 
                     if extracted_filename and os.path.exists(code_download_filepath_absolute):
-                        # print(f"Code download file exists at: {code_download_filepath_absolute}") # Removed verbose print
                         image_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff']
                         if os.path.splitext(code_download_filename)[1].lower() in image_extensions:
                             code_is_image = True
-                            # print(f"Detected image file from code interpreter: {code_download_filename}") # Removed verbose print
                     else:
                         print(f"Code download file '{extracted_filename}' NOT found at '{code_download_filepath_absolute}'.")
                         text_to_display += f"\n\n*(Warning: The file '{extracted_filename}' mentioned for download could not be found.)*"
+            
+            elif message["role"] == "user":
+                text_to_display = str(content) # User content is simpler
 
             # Apply strip to the final text to display, after all extractions
             text_to_display = text_to_display.strip()
 
             # --- 3. Display main text content ---
-            if text_to_display:
+            if text_to_display: # Only display if there's something left after stripping markers
                 st.markdown(text_to_display)
 
             # --- 4. Display RAG sources (PDFs and Web Links) - Deduplicated ---
-            displayed_rag_identifiers = set()
-            any_rag_sources_displayed = False
+            # This section only applies if role was assistant and rag_sources_data was populated
+            if message["role"] == "assistant" and rag_sources_data:
+                displayed_rag_identifiers = set()
+                any_rag_sources_displayed = False
+                for rag_idx, rag_data in enumerate(rag_sources_data):
+                    source_type = rag_data.get("type")
+                    identifier = None
+                    display_item = False
 
-            for rag_idx, rag_data in enumerate(rag_sources_data):
-                source_type = rag_data.get("type")
-                
-                identifier = None
-                display_item = False
-
-                if source_type == "pdf":
-                    pdf_name = rag_data.get("name", "source.pdf")
-                    pdf_relative_path = rag_data.get("path")
+                    if source_type == "pdf":
+                        pdf_name = rag_data.get("name", "source.pdf")
+                        pdf_relative_path = rag_data.get("path")
+                        identifier = pdf_relative_path
+                        if identifier and identifier not in displayed_rag_identifiers:
+                            pdf_absolute_path = os.path.join(PROJECT_ROOT, pdf_relative_path) if pdf_relative_path else None
+                            if pdf_absolute_path and os.path.exists(pdf_absolute_path):
+                                try:
+                                    citation_num = rag_data.get('citation_number')
+                                    citation_prefix = f"[{citation_num}] " if citation_num else ""
+                                    button_label = f"{citation_prefix}Download PDF: {pdf_name}"
+                                    with open(pdf_absolute_path, "rb") as fp:
+                                        st.download_button(
+                                            label=button_label, data=fp, file_name=pdf_name,
+                                            mime="application/pdf", key=f"rag_pdf_{msg_idx}_{rag_idx}_{pdf_name}"
+                                        )
+                                    display_item = True
+                                except Exception as e:
+                                    st.error(f"Error creating download button for {pdf_name}: {e}")
+                            elif pdf_relative_path:
+                                st.warning(f"Referenced PDF '{pdf_name}' not found.")
                     
-                    identifier = pdf_relative_path
-                    if identifier and identifier not in displayed_rag_identifiers:
-                        pdf_absolute_path = os.path.join(PROJECT_ROOT, pdf_relative_path) if pdf_relative_path else None
-
-                        if pdf_absolute_path and os.path.exists(pdf_absolute_path):
-                            try:
-                                citation_num = rag_data.get('citation_number')
-                                citation_prefix = f"[{citation_num}] " if citation_num else ""
-                                button_label = f"{citation_prefix}Download PDF: {pdf_name}"
-
-                                with open(pdf_absolute_path, "rb") as fp:
-                                    st.download_button(
-                                        label=button_label,
-                                        data=fp,
-                                        file_name=pdf_name,
-                                        mime="application/pdf",
-                                        key=f"rag_pdf_{msg_idx}_{rag_idx}_{pdf_name}"
-                                    )
-                                # print(f"Added download button for RAG PDF: {button_label} (Path: {pdf_absolute_path})") # Removed verbose print
+                    elif source_type == "web":
+                        url = rag_data.get("url")
+                        title = rag_data.get("title", url)
+                        identifier = url
+                        if identifier and identifier not in displayed_rag_identifiers:
+                            if url:
+                                st.markdown(f"Source: [{title}]({url})")
                                 display_item = True
-                            except Exception as e:
-                                st.error(f"Error creating download button for {pdf_name}: {e}")
-                                print(f"Error for RAG PDF '{pdf_name}': {e}")
-                        elif pdf_relative_path:
-                            st.warning(f"Referenced PDF '{pdf_name}' not found.")
-                            print(f"Warning: Referenced PDF '{pdf_name}' not found at expected absolute path: {pdf_absolute_path}")
+                    
+                    if display_item and identifier:
+                        displayed_rag_identifiers.add(identifier)
+                        any_rag_sources_displayed = True
                 
-                elif source_type == "web":
-                    url = rag_data.get("url")
-                    title = rag_data.get("title", url)
-                    identifier = url
-                    if identifier and identifier not in displayed_rag_identifiers:
-                        if url:
-                            st.markdown(f"Source: [{title}]({url})")
-                            # print(f"Added link for RAG web source: {title} (URL: {url})") # Removed verbose print
-                            display_item = True
-                
-                if display_item and identifier:
-                    displayed_rag_identifiers.add(identifier)
-                    any_rag_sources_displayed = True
-            
-            if any_rag_sources_displayed:
-                st.divider()
+                if any_rag_sources_displayed:
+                    st.divider()
 
             # --- 5. Display Code Interpreter output (Image or Download Button) ---
-            code_download_absolute_filepath = os.path.join(PROJECT_ROOT, code_download_filepath_relative) if code_download_filepath_relative else None
+            # This section only applies if role was assistant and code_download_filepath_relative was set
+            if message["role"] == "assistant" and code_download_filepath_relative:
+                code_download_absolute_filepath = os.path.join(PROJECT_ROOT, code_download_filepath_relative)
+                if code_is_image and code_download_absolute_filepath and os.path.exists(code_download_absolute_filepath):
+                    try:
+                        st.image(code_download_absolute_filepath, caption=code_download_filename, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Error displaying image {code_download_filename}: {e}")
+                
+                # Changed condition: If it's a download path, and (it's not an image OR the image file doesn't exist)
+                if code_download_filename and code_download_absolute_filepath and (not code_is_image or not os.path.exists(code_download_absolute_filepath)):
+                    if os.path.exists(code_download_absolute_filepath): # Ensure file exists before trying to open
+                        try:
+                            with open(code_download_absolute_filepath, "rb") as fp:
+                                st.download_button(
+                                    label=f"Download {code_download_filename}", data=fp, file_name=code_download_filename,
+                                    mime="application/octet-stream", key=f"code_dl_{msg_idx}_{code_download_filename}"
+                                )
+                        except Exception as e:
+                            st.error(f"Error creating download button for {code_download_filename}: {e}")
+                    # else: The warning for missing file is handled during marker extraction.
 
-            if code_is_image and code_download_absolute_filepath and os.path.exists(code_download_absolute_filepath):
-                try:
-                    st.image(code_download_absolute_filepath, caption=code_download_filename, use_container_width=True)
-                    # print(f"Successfully displayed image from code interpreter: {code_download_filename}") # Removed verbose print
-                except Exception as e:
-                    st.error(f"Error displaying image {code_download_filename}: {e}")
-            
-            if code_download_absolute_filepath and (not code_is_image or not os.path.exists(code_download_absolute_filepath)):
-                try:
-                    with open(code_download_absolute_filepath, "rb") as fp:
-                        st.download_button(
-                            label=f"Download {code_download_filename}",
-                            data=fp,
-                            file_name=code_download_filename,
-                            mime="application/octet-stream",
-                            key=f"code_dl_{msg_idx}_{code_download_filename}"
-                        )
-                    # print(f"Successfully added download button for code interpreter file: {code_download_filename}") # Removed verbose print
-                except Exception as e:
-                    st.error(f"Error creating download button for {code_download_filename}: {e}")
+            # --- 6. New: Display reasoning if available (for assistant messages) ---
+            if message["role"] == "assistant" and reasoning_steps and isinstance(reasoning_steps, list) and len(reasoning_steps) > 0:
+                with st.expander("Show Reasoning"):
+                    for step in reasoning_steps:
+                        st.markdown(f"- {step}")
 
-            # Add regenerate button for the last assistant message
+            # --- 7. Add regenerate button for the last assistant message ---
             if message["role"] == "assistant" and msg_idx == len(st.session_state.messages) - 1:
                 can_regenerate = False
-                if len(st.session_state.messages) == 1:
+                if len(st.session_state.messages) == 1: # If it's the first message (initial greeting)
                     can_regenerate = True
                 elif len(st.session_state.messages) > 1 and st.session_state.messages[msg_idx - 1]["role"] == "user":
                     can_regenerate = True
                 
                 if can_regenerate:
                     if st.button("🔄", key=f"regenerate_{msg_idx}", help="Regenerate Response"):
-                        st.session_state.do_regenerate = True # Set flag for app.py to handle
+                        st.session_state.do_regenerate = True 
                         st.rerun()
 
 

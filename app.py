@@ -5,8 +5,10 @@ import uuid # For generating unique user IDs
 from typing import Any, Optional, Dict, List
 from llama_index.core.llms import ChatMessage, MessageRole
 import stui
-from agent import create_unified_agent, generate_suggested_prompts, initialize_settings as initialize_agent_settings, generate_llm_greeting
+from agent import create_unified_agent, generate_suggested_prompts, initialize_settings as initialize_agent_settings, generate_llm_greeting, StructuredChatResponse # Added StructuredChatResponse
 from dotenv import load_dotenv
+import google.generativeai as genai # Added for structuring model
+from pydantic import ValidationError # Added for parsing validation
 
 import user_data_manager # New import for user data persistence
 
@@ -96,45 +98,117 @@ def format_chat_history(streamlit_messages: list[dict[str, Any]]) -> list[ChatMe
     history = []
     for msg in streamlit_messages:
         role = MessageRole.USER if msg["role"] == "user" else MessageRole.ASSISTANT
-        history.append(ChatMessage(role=role, content=msg["content"]))
+        
+        content_for_llm_history = ""
+        if msg["role"] == "user":
+            content_for_llm_history = msg["content"]
+        elif msg["role"] == "assistant":
+            if isinstance(msg["content"], dict) and "answer" in msg["content"]:
+                content_for_llm_history = msg["content"]["answer"]
+            elif isinstance(msg["content"], str): # Fallback for old format or simple string content
+                content_for_llm_history = msg["content"]
+            else: # Should not happen with proper saving
+                print(f"Warning: Assistant message content is in unexpected format: {msg['content']}")
+                content_for_llm_history = str(msg["content"])
+        
+        history.append(ChatMessage(role=role, content=content_for_llm_history))
     return history
 
 
 # --- Agent Interaction ---
-def get_agent_response(query: str, chat_history: list[ChatMessage]) -> str:
+def get_agent_response(query: str, chat_history: list[ChatMessage]) -> StructuredChatResponse:
     """
-    Get a response from the agent stored in the session state using the chat method,
-    explicitly passing the conversation history.
+    Get a response from the agent, then reformat it into a StructuredChatResponse
+    using a separate Gemini model call.
     """
     if AGENT_SESSION_KEY not in st.session_state or st.session_state[AGENT_SESSION_KEY] is None:
-        return "Error: Agent not initialized. Please refresh the page."
+        return StructuredChatResponse(answer="Error: Agent not initialized. Please refresh the page.", reasoning=[])
 
-    agent = st.session_state[AGENT_SESSION_KEY]
+    agent_runner = st.session_state[AGENT_SESSION_KEY]
+    original_response_text: str
 
     try:
         current_temperature = st.session_state.get("llm_temperature", 0.7)
 
-        if hasattr(agent, '_agent_worker') and hasattr(agent._agent_worker, '_llm'):
-            actual_llm_instance = agent._agent_worker._llm
+        # Accessing the LLM instance within AgentRunner -> FunctionCallingAgentWorker -> LLM
+        if hasattr(agent_runner, '_agent_worker') and hasattr(agent_runner._agent_worker, '_llm'):
+            actual_llm_instance = agent_runner._agent_worker._llm
             if hasattr(actual_llm_instance, 'temperature'):
                 actual_llm_instance.temperature = current_temperature
-                print(f"Set LLM temperature to: {current_temperature}")
+                print(f"Set agent LLM temperature to: {current_temperature}")
             else:
-                print(f"Warning: LLM object of type {type(actual_llm_instance)} does not have a 'temperature' attribute.")
+                print(f"Warning: Agent LLM object of type {type(actual_llm_instance)} does not have a 'temperature' attribute.")
         else:
-            print("Warning: Could not access LLM object within the agent to set temperature. Agent or worker structure might have changed (_agent_worker or _agent_worker._llm not found).")
+            print("Warning: Could not access LLM object within the agent to set temperature.")
 
-        with st.spinner("ESI is thinking..."):
-            response = agent.chat(query, chat_history=chat_history) # Corrected: chat_history was formatted_history
+        with st.spinner("ESI (Agent) is thinking..."):
+            # Ensure agent is AgentRunner and has chat method
+            response_obj = agent_runner.chat(query, chat_history=chat_history)
 
-        response_text = response.response if hasattr(response, 'response') else str(response)
-
-        print(f"Unified agent final response text for UI: \n{response_text[:500]}...")
-        return response_text
+        original_response_text = response_obj.response if hasattr(response_obj, 'response') else str(response_obj)
+        print(f"Unified agent raw response text: \n{original_response_text[:500]}...")
 
     except Exception as e:
         print(f"Error getting unified agent response: {e}")
-        return f"I apologize, but I encountered an error while processing your request. Please try again or rephrase your question. Technical details: {str(e)}"
+        original_response_text = f"I apologize, but I encountered an error while processing your request with the main agent. Please try again. Technical details: {str(e)}"
+        # Proceed to structuring, so the error is at least in the answer field.
+        return StructuredChatResponse(answer=original_response_text, reasoning=["Error during main agent execution."])
+
+    # --- Structuring Step using a separate Gemini model ---
+    try:
+        print("Attempting to structure agent response...")
+        google_api_key = os.getenv("GOOGLE_API_KEY")
+        if not google_api_key:
+            # This should ideally not happen if the main agent initialized
+            print("Error: GOOGLE_API_KEY not found for structuring model.")
+            return StructuredChatResponse(answer=original_response_text, reasoning=["Error: API key not found for structuring."])
+
+        # Define the structuring prompt
+        structuring_prompt = f"""Original chatbot response:
+---
+{original_response_text}
+---
+
+Reformat this response into a JSON object with two fields: "answer" and "reasoning".
+- The "answer" field must contain the full original chatbot response, including any special markers like '---RAG_SOURCE---...' or '---DOWNLOAD_FILE---...'.
+- The "reasoning" field must be a list of strings, providing a brief step-by-step explanation of how the original response was likely generated or the key steps taken by the chatbot. If the reasoning is not obvious from the text, provide a general summary of the thought process (e.g., "The agent likely searched its knowledge base for X and then summarized Y.").
+"""
+        # Initialize the Gemini model for structuring
+        # Using "gemini-1.5-flash-latest" for broad availability, target was "gemini-2.5-flash-preview-05-20"
+        structuring_model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash-latest", # Or "gemini-2.5-flash-preview-05-20" if confirmed available
+            api_key=google_api_key,
+            generation_config=genai.types.GenerationConfig(
+                response_mime_type="application/json",
+                response_schema=StructuredChatResponse, # Use the Pydantic model for schema
+                temperature=0.1 # Low temperature for deterministic structuring
+            )
+        )
+
+        with st.spinner("ESI (Structuring) is thinking..."):
+            structured_response_raw = structuring_model.generate_content(structuring_prompt)
+        
+        # The SDK should parse the JSON into the Pydantic model automatically if response_schema is used
+        # and the model output is compliant.
+        if structured_response_raw.candidates and structured_response_raw.candidates[0].content.parts:
+            # For pydantic model schema, the parsed object is often in the .json attribute of the part
+            parsed_json = structured_response_raw.candidates[0].content.parts[0].json
+            structured_chat_response = StructuredChatResponse(**parsed_json)
+            
+            print(f"Structured response generated. Answer: {structured_chat_response.answer[:200]}..., Reasoning: {structured_chat_response.reasoning}")
+            return structured_chat_response
+        else:
+            print("Error: Structuring model did not return valid parsable content.")
+            return StructuredChatResponse(answer=original_response_text, reasoning=["Error: Structuring model returned no valid content."])
+
+    except ValidationError as ve:
+        print(f"Pydantic Validation Error during structuring: {ve}")
+        return StructuredChatResponse(answer=original_response_text, reasoning=[f"Structuring validation error: {str(ve)}"])
+    except Exception as e:
+        print(f"Error during structuring agent response: {e}")
+        # Fallback: return original text in the 'answer' field
+        return StructuredChatResponse(answer=original_response_text, reasoning=[f"Error during structuring: {str(e)}"])
+
 
 def handle_user_input(chat_input_value: str | None):
     """
@@ -169,8 +243,8 @@ def handle_user_input(chat_input_value: str | None):
             st.markdown(prompt_to_process)
 
         formatted_history = format_chat_history(st.session_state.messages)
-        response_text = get_agent_response(prompt_to_process, chat_history=formatted_history)
-        st.session_state.messages.append({"role": "assistant", "content": response_text})
+        structured_response_obj = get_agent_response(prompt_to_process, chat_history=formatted_history)
+        st.session_state.messages.append({"role": "assistant", "content": structured_response_obj.model_dump()})
 
         # Save the updated discussion after each turn
         _save_current_discussion()
@@ -189,7 +263,8 @@ def _create_new_discussion_session():
     st.session_state.current_discussion_title = new_discussion_meta["title"] # Standardized name
     
     # Initialize messages with a greeting
-    st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}] # Direct call to agent.py
+    greeting_text = generate_llm_greeting() # Direct call to agent.py
+    st.session_state.messages = [{"role": "assistant", "content": {"answer": greeting_text, "reasoning": ["Initial greeting."]}}]
     st.session_state.should_generate_prompts = True # Set flag to generate new prompts
     st.session_state.editing_list_discussion_id = None # Exit any inline editing mode
 
@@ -207,7 +282,8 @@ def _load_discussion_session(discussion_id: str):
         st.session_state.messages = discussion_data.get("messages", [])
         
         if not st.session_state.messages: # If loaded discussion is empty, add greeting
-             st.session_state.messages = [{"role": "assistant", "content": generate_llm_greeting()}] # Direct call to agent.py
+             greeting_text = generate_llm_greeting() # Direct call to agent.py
+             st.session_state.messages = [{"role": "assistant", "content": {"answer": greeting_text, "reasoning": ["Initial greeting for empty discussion."]}}]
         
         st.session_state.should_generate_prompts = True # Set flag to generate new prompts
         st.session_state.editing_list_discussion_id = None # Exit any inline editing mode
@@ -314,8 +390,21 @@ def _get_discussion_markdown(discussion_id: str) -> str:
     markdown_content = f"# Discussion: {discussion_data.get('title', 'Untitled Discussion')}\n\n"
     for message in discussion_data.get('messages', []):
         role = message["role"].capitalize()
-        content = message["content"]
-        markdown_content += f"## {role}\n{content}\n\n"
+        content_to_display = ""
+        if message["role"] == "user":
+            content_to_display = message["content"]
+        elif message["role"] == "assistant":
+            if isinstance(message["content"], dict) and "answer" in message["content"]:
+                content_to_display = message["content"]["answer"]
+                 # Optionally, append reasoning for more detailed markdown:
+                # if "reasoning" in message["content"] and message["content"]["reasoning"]:
+                #    content_to_display += f"\n\n_Reasoning: {'; '.join(message['content']['reasoning'])}_"
+            elif isinstance(message["content"], str): # Fallback
+                content_to_display = message["content"]
+            else:
+                content_to_display = str(message["content"])
+
+        markdown_content += f"## {role}\n{content_to_display}\n\n"
     return markdown_content
 
 
@@ -335,8 +424,8 @@ def handle_regeneration_request():
     # Case 1: Regenerating the initial greeting
     if len(st.session_state.messages) == 1:
         print("Regenerating initial greeting...")
-        new_greeting = generate_llm_greeting() # Direct call to agent.py
-        st.session_state.messages[0]['content'] = new_greeting
+        new_greeting_text = generate_llm_greeting() # Direct call to agent.py
+        st.session_state.messages[0]['content'] = {"answer": new_greeting_text, "reasoning": ["Initial greeting regenerated."]}
         _save_current_discussion() # Save the regenerated greeting
         st.session_state.should_generate_prompts = True # Set flag to generate new prompts
         st.rerun()
@@ -354,8 +443,8 @@ def handle_regeneration_request():
     prompt_to_regenerate = st.session_state.messages[-1]['content']
     formatted_history_for_regen = format_chat_history(st.session_state.messages)
 
-    response_text = get_agent_response(prompt_to_regenerate, chat_history=formatted_history_for_regen)
-    st.session_state.messages.append({"role": "assistant", "content": response_text})
+    structured_response_obj = get_agent_response(prompt_to_regenerate, chat_history=formatted_history_for_regen)
+    st.session_state.messages.append({"role": "assistant", "content": structured_response_obj.model_dump()})
     _save_current_discussion() # Save the regenerated response
     st.session_state.should_generate_prompts = True # Set flag to generate new prompts
     st.rerun()
