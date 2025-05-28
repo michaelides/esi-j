@@ -130,7 +130,7 @@ def get_agent_response(query: str, chat_history: list[ChatMessage]) -> str:
             print("Warning: Could not access LLM object within the agent to set temperature.")
 
         with st.spinner("ESI is thinking..."): # Simplified spinner message
-            response_obj = agent_runner.chat(query, chat_history=chat_history)
+            response_obj = agent_runner.chat(query, chat_history=formatted_history)
 
         response_text = response_obj.response if hasattr(response_obj, 'response') else str(response_obj)
 
@@ -204,7 +204,7 @@ def _create_new_discussion_session():
 
     _refresh_discussion_list()
     print(f"New discussion created and set as current: {st.session_state.current_discussion_title} ({st.session_state.current_discussion_id})")
-    st.rerun() # Rerun to update UI with the new discussion
+    # Removed st.rerun() - button click will trigger natural rerun
 
 def _load_discussion_session(discussion_id: str):
     """Loads an existing discussion and sets it as current."""
@@ -400,7 +400,7 @@ def main():
     # --- User Identification and Initial Discussion Load (Cookie-based) ---
     # This block should only run once per session to set up user_id and initial discussion
     if not st.session_state.user_id_initialized:
-        print("Initial user/discussion setup running...") # Add a debug print
+        print("Initial user/discussion setup running...")
         
         user_id = None
         try:
@@ -408,39 +408,47 @@ def main():
             if not user_id: 
                 raise KeyError("User ID cookie empty")
             print(f"Loaded user ID from cookie: {user_id}")
+            # If user_id is successfully loaded, set the flag and proceed
+            st.session_state.user_id = user_id
         except KeyError:
             print("User ID cookie not found or empty, generating a new one.")
             user_id = str(uuid.uuid4())
+            st.session_state.user_id = user_id # Assign to session state immediately
             cookies["user_id"] = user_id # Set it in the cookie
-            cookies.save() # Save the cookie
+            cookies.save() # Save the cookie - this triggers a rerun
             print(f"Generated new user ID and set cookie: {user_id}")
+            # After cookies.save(), the script will rerun from the top.
+            # The next run will find user_id_initialized as True and skip this block.
+            st.session_state.user_id_initialized = True # Set flag immediately before rerun
+            st.rerun() # Explicitly rerun after setting cookie to ensure state is consistent
         except Exception as e: # Catch other potential cookie errors
             st.error(f"An unexpected error occurred with cookies: {e}. Please try clearing your browser cookies for this site.")
             if 'user_id_temp' not in st.session_state: # Fallback to a temporary session ID
                 st.session_state.user_id_temp = str(uuid.uuid4())
             user_id = st.session_state.user_id_temp
+            st.session_state.user_id = user_id # Assign to session state immediately
             print(f"Fell back to temporary user ID: {user_id}")
+            # No rerun needed here, as it's a fallback, not a cookie save.
 
-        st.session_state.user_id = user_id # Assign the determined user_id to session state
-        
-        # !!! ENSURE THIS FLAG IS SET IMMEDIATELY AFTER user_id IS DETERMINED !!!
-        st.session_state.user_id_initialized = True 
-        print(f"User ID initialized and flag set for user: {st.session_state.user_id}") 
-        
-        # Populate discussion list for the first time
-        st.session_state.discussion_list = sorted(
-            user_data_manager.list_discussions(st.session_state.user_id),
-            key=lambda x: x.get('timestamp', ''), reverse=True
-        )
-        print(f"Initial discussion list populated with {len(st.session_state.discussion_list)} items.")
+        # This part should only run if user_id_initialized is True (either from loading or generating)
+        # and if it's the first time populating the discussion list for this session.
+        # This block is now outside the try-except, but still within the `if not user_id_initialized`
+        # to ensure it runs only once after user_id is established.
+        st.session_state.user_id_initialized = True # Ensure this is set after user_id is determined
+        if st.session_state.user_id: # Ensure user_id is set before listing discussions
+            st.session_state.discussion_list = sorted(
+                user_data_manager.list_discussions(st.session_state.user_id),
+                key=lambda x: x.get('timestamp', ''), reverse=True
+            )
+            print(f"Initial discussion list populated with {len(st.session_state.discussion_list)} items.")
 
     # --- Ensure a current discussion is always active after initial setup ---
     # This handles cases where the last discussion was deleted, or initial load failed.
     # This check is still important for subsequent runs within the same session
     # if a discussion is deleted and no new one is explicitly created.
     if not st.session_state.current_discussion_id:
-        _create_new_discussion_session() # This function will call st.rerun()
-        # Removed st.rerun() here as _create_new_discussion_session already calls it.
+        _create_new_discussion_session() # This function no longer calls st.rerun()
+        st.rerun() # Explicitly rerun here to update the UI with the new discussion
 
     # --- Main Chat Interface ---
     # Handle regeneration request if flag is set
